@@ -3,6 +3,7 @@ import db from './db';
 import { normalizePhone, otpStore } from './otpStore';
 import otpRequestHandler from '../../api/bdapps/otp-request';
 import otpVerifyHandler from '../../api/bdapps/otp-verify';
+import { bdappsFetch } from './bdappsHelper';
 
 /**
  * BDApps Integration Controller
@@ -16,7 +17,6 @@ const bdappsRouter = Router();
 // Environment configuration
 const APP_ID = process.env.BDAPPS_APPLICATION_ID || '';
 const PASSWORD = process.env.BDAPPS_PASSWORD || '';
-const BASE_URL = process.env.BDAPPS_BASE_URL || 'https://developer.bdapps.com';
 
 /**
  * 1. OTP Request (Linked to standalone handler)
@@ -54,37 +54,23 @@ const handleSubscriptionAction = async (req: Request, res: Response, action: '1'
     }
 
     const payload = {
+      version: '1.0',
       applicationId: APP_ID,
       password: PASSWORD,
       subscriberId: `tel:${cleanPhone}`,
-      action: action // 1: Subscribe, 0: Unsubscribe
+      action: parseInt(action, 10) // 1: Subscribe, 0: Unsubscribe (Must be integer)
     };
 
-    console.log(`[BDApps] Subscription Send (Action: ${action}) for ${cleanPhone}...`);
-    const response = await fetch(`${BASE_URL}/subscription/send`, {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(15000)
-    });
+    const { ok, data, error } = await bdappsFetch('subscription/send', payload);
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`[BDApps] Subscription Send HTTP Error ${response.status}:`, errorText);
-      throw new Error(`BDApps Gateway returned HTTP ${response.status}`);
+    if (ok) {
+      if (data.statusCode === 'S1000' || data.status === 'SUCCESS') {
+        db.updateSubscription(cleanPhone, action === '1' ? 'subscribed' : 'unsubscribed', action === '1' ? 'subscribe' : 'unsubscribe');
+      }
+      return res.json(data);
     }
 
-    const data = await response.json();
-    console.log(`[BDApps] Subscription Response:`, data);
-
-    if (data.statusCode === 'S1000' || data.status === 'SUCCESS') {
-      db.updateSubscription(cleanPhone, action === '1' ? 'subscribed' : 'unsubscribed', action === '1' ? 'subscribe' : 'unsubscribe');
-    }
-
-    return res.json(data);
+    throw error || new Error('BDApps subscription request failed');
   } catch (error) {
     console.error('[BDApps] Subscription Exception:', error);
     return res.status(500).json({
@@ -118,36 +104,24 @@ export const handleSubscriptionStatus = async (req: Request, res: Response) => {
     }
 
     const payload = {
+      version: '1.0',
       applicationId: APP_ID,
       password: PASSWORD,
       subscriberId: `tel:${cleanPhone}`
     };
 
-    console.log(`[BDApps] Querying status for ${cleanPhone}...`);
-    const response = await fetch(`${BASE_URL}/subscription/getStatus`, {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(15000)
-    });
+    const { ok, data, error } = await bdappsFetch('subscription/getStatus', payload);
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`[BDApps] GetStatus HTTP Error ${response.status}:`, errorText);
-      throw new Error(`BDApps Gateway returned HTTP ${response.status}`);
+    if (ok) {
+      // Transform BDApps response to our frontend format
+      return res.json({
+        phone: cleanPhone,
+        status: data.status === 'SUBSCRIBED' ? 'subscribed' : 'unsubscribed',
+        raw: data
+      });
     }
 
-    const data = await response.json();
-    
-    // Transform BDApps response to our frontend format
-    return res.json({
-      phone: cleanPhone,
-      status: data.status === 'SUBSCRIBED' ? 'subscribed' : 'unsubscribed',
-      raw: data
-    });
+    throw error || new Error('Failed to query status');
   } catch (error) {
     return res.status(500).json({ status: 'ERROR', message: 'Failed to query status' });
   }

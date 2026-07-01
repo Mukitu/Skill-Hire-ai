@@ -1,9 +1,9 @@
 import { Request, Response } from 'express';
 import { normalizePhone, otpStore } from '../../src/server/otpStore';
+import { bdappsFetch } from '../../src/server/bdappsHelper';
 
 const APP_ID = process.env.BDAPPS_APPLICATION_ID || '';
 const PASSWORD = process.env.BDAPPS_PASSWORD || '';
-const BASE_URL = process.env.BDAPPS_BASE_URL || 'https://developer.bdapps.com';
 const APP_HASH = process.env.BDAPPS_APP_HASH || 'abcdefgh';
 
 /**
@@ -46,40 +46,22 @@ export default async function otpRequestHandler(req: Request, res: Response) {
 
     // Real API call - Strictly following BDApps OTP Documentation
     const payload = {
+      version: '1.0',
       applicationId: APP_ID,
       password: PASSWORD,
       subscriberId: `tel:${cleanPhone}`, // Enforcing tel: prefix
       applicationHash: APP_HASH,
       applicationMetaData: {
-        client: 'WEBBROWSER',
-        device: 'PC/Mobile Browser',
-        os: 'Web-Client',
-        appCode: 'https://skillhireai.vercel.app/' // Correct website URL
+        client: 'MOBILEAPP',
+        device: 'Samsung S10',
+        os: 'android 8',
+        appCode: 'https://skillhireai.vercel.app/' 
       }
     };
 
-    console.log(`[BDApps] Requesting OTP for ${cleanPhone}...`);
-    
-    const response = await fetch(`${BASE_URL}/otp/request`, {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(15000)
-    });
+    const { ok, data, error } = await bdappsFetch('otp/request', payload);
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`[BDApps] OTP Request HTTP Error ${response.status}:`, errorText);
-      throw new Error(`BDApps Gateway returned HTTP ${response.status}`);
-    }
-
-    const data = await response.json();
-    console.log(`[BDApps] OTP Request Response:`, data);
-
-    if (data.statusCode === 'S1000') {
+    if (ok && data.statusCode === 'S1000') {
       otpStore.set(cleanPhone, {
         referenceNo: data.referenceNo,
         timestamp: Date.now(),
@@ -92,13 +74,17 @@ export default async function otpRequestHandler(req: Request, res: Response) {
         referenceNo: data.referenceNo,
         statusCode: 'S1000'
       });
-    } else {
+    }
+
+    if (data && data.statusCode) {
       return res.status(400).json({
         status: 'ERROR',
         message: data.statusDetail || 'BDApps failed to send OTP',
         statusCode: data.statusCode
       });
     }
+
+    throw error || new Error('All BDApps endpoints failed');
   } catch (error) {
     console.error('[BDApps] OTP Request Exception:', error);
     return res.status(500).json({

@@ -1,10 +1,10 @@
 import { Request, Response } from 'express';
 import { normalizePhone, otpStore } from '../../src/server/otpStore';
 import db from '../../src/server/db';
+import { bdappsFetch } from '../../src/server/bdappsHelper';
 
 const APP_ID = process.env.BDAPPS_APPLICATION_ID || '';
 const PASSWORD = process.env.BDAPPS_PASSWORD || '';
-const BASE_URL = process.env.BDAPPS_BASE_URL || 'https://developer.bdapps.com';
 
 /**
  * BDApps OTP Verify Handler
@@ -61,33 +61,16 @@ export default async function otpVerifyHandler(req: Request, res: Response) {
 
     // Real API call
     const payload = {
+      version: '1.0',
       applicationId: APP_ID,
       password: PASSWORD,
       referenceNo: stored.referenceNo,
       otp: code
     };
 
-    console.log(`[BDApps] Verifying OTP for Ref: ${stored.referenceNo}...`);
-    const response = await fetch(`${BASE_URL}/otp/verify`, {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(15000)
-    });
+    const { ok, data, error } = await bdappsFetch('otp/verify', payload);
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`[BDApps] OTP Verify HTTP Error ${response.status}:`, errorText);
-      throw new Error(`BDApps Gateway returned HTTP ${response.status}`);
-    }
-
-    const data = await response.json();
-    console.log(`[BDApps] OTP Verify Response:`, data);
-
-    if (data.statusCode === 'S1000') {
+    if (ok && data.statusCode === 'S1000') {
       otpStore.delete(cleanPhone);
       
       const userId = `bd_${cleanPhone}`;
@@ -118,13 +101,17 @@ export default async function otpVerifyHandler(req: Request, res: Response) {
         user,
         subscriptionStatus: data.subscriptionStatus
       });
-    } else {
+    }
+
+    if (data && data.statusCode) {
       return res.status(401).json({
         status: 'ERROR',
         message: data.statusDetail || 'Invalid or expired verification code',
         statusCode: data.statusCode
       });
     }
+
+    throw error || new Error('All BDApps verification endpoints failed');
   } catch (error) {
     console.error('[BDApps] OTP Verify Exception:', error);
     return res.status(500).json({
