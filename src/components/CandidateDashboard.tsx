@@ -15,7 +15,8 @@ import {
   useSubmitQuizMutation,
   useGenerateInterviewMutation,
   useEvaluateInterviewMutation,
-  useSubmitCodeMutation
+  useSubmitCodeMutation,
+  useGenerateCertificateMutation
 } from '../hooks/useQueries';
 
 // Modular Sub-components
@@ -247,6 +248,7 @@ export default function CandidateDashboard({ user, onOpenSubscribe }: CandidateD
 
   const submitQuizMutation = useSubmitQuizMutation();
   const submittingQuiz = submitQuizMutation.isPending;
+  const generateCertificateMutation = useGenerateCertificateMutation();
 
   const handleSubmitQuiz = async () => {
     if (!activeQuiz) return;
@@ -260,6 +262,17 @@ export default function CandidateDashboard({ user, onOpenSubscribe }: CandidateD
         if (data.status === 'success') {
           setQuizResult(data.attempt);
           setCompletedAttempts(prev => [...prev, data.attempt]);
+          
+          // Generate certificate if passed (score >= 70)
+          if (data.attempt.score >= 70) {
+            generateCertificateMutation.mutate({
+              candidateId: user.id,
+              skillName: activeQuiz.title || 'Skill Assessment',
+              score: data.attempt.score,
+              difficultyLevel: 'Intermediate' // Or map from assessment
+            });
+          }
+
           // Re-sync with backend profile & custom data
           await syncProfile();
           await fetchCandidateCustomData();
@@ -361,6 +374,17 @@ export default function CandidateDashboard({ user, onOpenSubscribe }: CandidateD
       onSuccess: async (data) => {
         if (data.status === 'success') {
           setSandboxFeedback(data.submission);
+          
+          // Generate certificate if passed practical task (score >= 70)
+          if (data.submission?.evaluation?.score >= 70) {
+            generateCertificateMutation.mutate({
+              candidateId: user.id,
+              skillName: activeTask.title || 'Practical Task',
+              score: data.submission.evaluation.score,
+              difficultyLevel: 'Advanced' // Practical tasks are generally Advanced
+            });
+          }
+
           await syncProfile();
           await fetchCandidateCustomData();
         }

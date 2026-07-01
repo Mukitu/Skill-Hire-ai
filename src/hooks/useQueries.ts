@@ -189,6 +189,25 @@ export function useSubmitCodeMutation() {
   });
 }
 
+export function useGenerateCertificateMutation() {
+  const queryClient = useQueryClient();
+  return useMutation<any, Error, { candidateId: string; skillName: string; score: number; difficultyLevel: string }>({
+    mutationFn: async (payload) => {
+      const res = await fetch('/api/certificates/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      return res.json();
+    },
+    onSuccess: (data) => {
+      if (data.status === 'success') {
+        queryClient.invalidateQueries({ queryKey: ['certificates'] });
+      }
+    },
+  });
+}
+
 export function useScanResumeMutation() {
   return useMutation<any, Error, { resumeText: string; jobRequirements: string[] }>({
     mutationFn: async (payload) => {

@@ -1,81 +1,36 @@
-import React, { useState, useEffect } from 'react';
-import { Award, Shield, CheckCircle2, Cpu, TrendingUp, HelpCircle, Code, Globe, Github, Activity, Loader2, FileText, Sparkles } from 'lucide-react';
+import React from 'react';
+import { Award, Shield, CheckCircle2, Cpu, TrendingUp, HelpCircle, Code, Globe, Github, Activity, Loader2, FileText, Sparkles, AlertCircle } from 'lucide-react';
 import { UserProfile } from '../../types';
+import { useAIReputationScore } from '../../hooks/useAI';
 
 interface AIReputationScoreProps {
   user: UserProfile;
 }
 
-interface ReputationBreakdown {
-  reputationScore: number;
-  baseScore: number;
-  assessmentScore: number;
-  certificatesScore: number;
-  projectsScore: number;
-  portfolioScore: number;
-  applicationsScore: number;
-  activityScore: number;
-  verifiedCount: number;
-  avgQuizScore: number;
-  certCount: number;
-  submissionCount: number;
-  avgProjScore: number;
-  githubConnected: boolean;
-  portfolioConnected: boolean;
-  appCount: number;
-  activityCount: number;
-}
-
 export default function AIReputationScore({ user }: AIReputationScoreProps) {
-  const [breakdown, setBreakdown] = useState<ReputationBreakdown | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { data: response, isLoading, isError, error } = useAIReputationScore(user.id);
 
-  const fetchReputationBreakdown = async () => {
-    try {
-      const res = await fetch(`/api/candidates/${user.id}/reputation`);
-      const data = await res.json();
-      if (data.status === 'success') {
-        setBreakdown(data.data);
-      }
-    } catch (err) {
-      console.error('Failed to fetch reputation breakdown:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchReputationBreakdown();
-  }, [user.id, user.reputationScore, user.githubUrl, user.portfolioUrl]);
-
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="bg-[#0D1117] border border-slate-800 rounded-2xl p-12 text-center flex flex-col items-center justify-center space-y-4">
         <Loader2 className="w-8 h-8 text-indigo-400 animate-spin" />
-        <p className="text-xs text-slate-400 font-medium">Analyzing career activities and calculating reputation weights...</p>
+        <p className="text-xs text-slate-400 font-medium">Analyzing career activities and computing AI reputation metric...</p>
       </div>
     );
   }
 
-  const data = breakdown || {
-    reputationScore: user.reputationScore || 500,
-    baseScore: 300,
-    assessmentScore: 0,
-    certificatesScore: 0,
-    projectsScore: 0,
-    portfolioScore: 0,
-    applicationsScore: 0,
-    activityScore: 0,
-    verifiedCount: 0,
-    avgQuizScore: 0,
-    certCount: 0,
-    submissionCount: 0,
-    avgProjScore: 0,
-    githubConnected: !!user.githubUrl,
-    portfolioConnected: !!user.portfolioUrl,
-    appCount: 0,
-    activityCount: 0
-  };
+  if (isError) {
+    return (
+      <div className="bg-[#0D1117] border border-slate-800 rounded-2xl p-12 text-center flex flex-col items-center justify-center space-y-4">
+        <AlertCircle className="w-8 h-8 text-red-400" />
+        <p className="text-xs text-slate-400 font-medium">{error?.message || 'Failed to fetch AI reputation score'}</p>
+      </div>
+    );
+  }
+
+  const data = response?.data;
+  
+  if (!data) return null;
 
   return (
     <div className="space-y-6">
@@ -102,7 +57,7 @@ export default function AIReputationScore({ user }: AIReputationScoreProps) {
               stroke="url(#neonGradient)" 
               strokeWidth="8" 
               strokeDasharray="251.2" 
-              strokeDashoffset={251.2 - (251.2 * data.reputationScore) / 1000} 
+              strokeDashoffset={251.2 - (251.2 * data.score) / 1000} 
               strokeLinecap="round"
               fill="transparent" 
             />
@@ -114,7 +69,7 @@ export default function AIReputationScore({ user }: AIReputationScoreProps) {
             </defs>
           </svg>
           <div className="absolute text-center space-y-0.5">
-            <span className="text-3xl font-black text-white font-mono tracking-tight">{data.reputationScore}</span>
+            <span className="text-3xl font-black text-white font-mono tracking-tight">{data.score}</span>
             <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">CAREER INDEX</p>
           </div>
         </div>
@@ -125,10 +80,16 @@ export default function AIReputationScore({ user }: AIReputationScoreProps) {
             <Cpu className="w-3.5 h-3.5 text-indigo-400 animate-pulse" />
             LIVE VERIFIABLE CREDENTIAL METRIC
           </div>
-          <h2 className="text-xl font-extrabold text-white tracking-tight">AI Reputation Score Analysis</h2>
+          <h2 className="text-xl font-extrabold text-white tracking-tight flex items-center gap-2 justify-center md:justify-start">
+            AI Reputation Score
+            <span className="text-[10px] font-mono font-medium bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 px-2 py-0.5 rounded-full uppercase">Groq AI</span>
+          </h2>
           <p className="text-xs text-slate-400 leading-relaxed max-w-xl">
-            The AI Reputation Score is an aggregated career score dynamically calculated from theoretical assessments, verified certifications, practical sandbox submissions, portfolio profiles, and application activities. Maintain a high score to stand out to employers.
+            {data.summary}
           </p>
+          <div className="inline-block mt-2 px-3 py-1 bg-slate-900 border border-slate-700 rounded-lg text-xs font-bold text-slate-200">
+            Current Tier: <span className="text-teal-400">{data.badge}</span>
+          </div>
         </div>
       </div>
 
@@ -147,11 +108,11 @@ export default function AIReputationScore({ user }: AIReputationScoreProps) {
             {/* 1. Base Score */}
             <div className="space-y-1">
               <div className="flex justify-between items-center text-xs">
-                <span className="font-bold text-slate-300">Base Account Creation Credentials</span>
-                <span className="font-mono text-slate-400">+{data.baseScore} / 300 pts</span>
+                <span className="font-bold text-slate-300">Base Account Credentials</span>
+                <span className="font-mono text-slate-400">+{data.breakdown.base} / 300 pts</span>
               </div>
               <div className="h-1.5 w-full bg-slate-950 rounded-full overflow-hidden">
-                <div className="h-full bg-slate-600" style={{ width: `${(data.baseScore / 300) * 100}%` }} />
+                <div className="h-full bg-slate-600" style={{ width: `${(data.breakdown.base / 300) * 100}%` }} />
               </div>
             </div>
 
@@ -160,12 +121,11 @@ export default function AIReputationScore({ user }: AIReputationScoreProps) {
               <div className="flex justify-between items-center text-xs">
                 <div className="flex items-center gap-1">
                   <span className="font-bold text-slate-300">Theoretical Assessments</span>
-                  <span className="text-[10px] text-slate-500 font-normal">({data.verifiedCount} badged, avg {data.avgQuizScore}%)</span>
                 </div>
-                <span className="font-mono text-teal-400">+{data.assessmentScore} / 180 pts</span>
+                <span className="font-mono text-teal-400">+{data.breakdown.assessments} / 200 pts</span>
               </div>
               <div className="h-1.5 w-full bg-slate-950 rounded-full overflow-hidden">
-                <div className="h-full bg-teal-400" style={{ width: `${(data.assessmentScore / 180) * 100}%` }} />
+                <div className="h-full bg-teal-400" style={{ width: `${(data.breakdown.assessments / 200) * 100}%` }} />
               </div>
             </div>
 
@@ -174,12 +134,11 @@ export default function AIReputationScore({ user }: AIReputationScoreProps) {
               <div className="flex justify-between items-center text-xs">
                 <div className="flex items-center gap-1">
                   <span className="font-bold text-slate-300">Verified Certificates</span>
-                  <span className="text-[10px] text-slate-500 font-normal">({data.certCount} active)</span>
                 </div>
-                <span className="font-mono text-indigo-400">+{data.certificatesScore} / 120 pts</span>
+                <span className="font-mono text-indigo-400">+{data.breakdown.certificates} / 150 pts</span>
               </div>
               <div className="h-1.5 w-full bg-slate-950 rounded-full overflow-hidden">
-                <div className="h-full bg-indigo-500" style={{ width: `${(data.certificatesScore / 120) * 100}%` }} />
+                <div className="h-full bg-indigo-500" style={{ width: `${(data.breakdown.certificates / 150) * 100}%` }} />
               </div>
             </div>
 
@@ -188,12 +147,11 @@ export default function AIReputationScore({ user }: AIReputationScoreProps) {
               <div className="flex justify-between items-center text-xs">
                 <div className="flex items-center gap-1">
                   <span className="font-bold text-slate-300">Projects & Challenge Submissions</span>
-                  <span className="text-[10px] text-slate-500 font-normal">({data.submissionCount} submitted)</span>
                 </div>
-                <span className="font-mono text-cyan-400">+{data.projectsScore} / 200 pts</span>
+                <span className="font-mono text-cyan-400">+{data.breakdown.tasks} / 250 pts</span>
               </div>
               <div className="h-1.5 w-full bg-slate-950 rounded-full overflow-hidden">
-                <div className="h-full bg-cyan-400" style={{ width: `${(data.projectsScore / 200) * 100}%` }} />
+                <div className="h-full bg-cyan-400" style={{ width: `${(data.breakdown.tasks / 250) * 100}%` }} />
               </div>
             </div>
 
@@ -201,43 +159,25 @@ export default function AIReputationScore({ user }: AIReputationScoreProps) {
             <div className="space-y-1">
               <div className="flex justify-between items-center text-xs">
                 <div className="flex items-center gap-1">
-                  <span className="font-bold text-slate-300">Portfolio & Profile Integration</span>
-                  <span className="text-[10px] text-slate-500 font-normal">
-                    ({data.githubConnected ? 'GitHub ✅' : 'GitHub ❌'}, {data.portfolioConnected ? 'Portfolio ✅' : 'Portfolio ❌'})
-                  </span>
+                  <span className="font-bold text-slate-300">Portfolio Links</span>
                 </div>
-                <span className="font-mono text-fuchsia-400">+{data.portfolioScore} / 100 pts</span>
+                <span className="font-mono text-fuchsia-400">+{data.breakdown.portfolio} / 100 pts</span>
               </div>
               <div className="h-1.5 w-full bg-slate-950 rounded-full overflow-hidden">
-                <div className="h-full bg-fuchsia-500" style={{ width: `${(data.portfolioScore / 100) * 100}%` }} />
+                <div className="h-full bg-fuchsia-500" style={{ width: `${(data.breakdown.portfolio / 100) * 100}%` }} />
               </div>
             </div>
 
-            {/* 6. Applications */}
+            {/* 6. Activity */}
             <div className="space-y-1">
               <div className="flex justify-between items-center text-xs">
                 <div className="flex items-center gap-1">
-                  <span className="font-bold text-slate-300">Job Applications Engagement</span>
-                  <span className="text-[10px] text-slate-500 font-normal">({data.appCount} applied)</span>
+                  <span className="font-bold text-slate-300">Platform Activity</span>
                 </div>
-                <span className="font-mono text-emerald-400">+{data.applicationsScore} / 50 pts</span>
+                <span className="font-mono text-pink-400">+{data.breakdown.activity} / 100 pts</span>
               </div>
               <div className="h-1.5 w-full bg-slate-950 rounded-full overflow-hidden">
-                <div className="h-full bg-emerald-500" style={{ width: `${(data.applicationsScore / 50) * 100}%` }} />
-              </div>
-            </div>
-
-            {/* 7. Activity */}
-            <div className="space-y-1">
-              <div className="flex justify-between items-center text-xs">
-                <div className="flex items-center gap-1">
-                  <span className="font-bold text-slate-300">Interactive Activity Index</span>
-                  <span className="text-[10px] text-slate-500 font-normal">({data.activityCount} recorded logs)</span>
-                </div>
-                <span className="font-mono text-pink-400">+{data.activityScore} / 50 pts</span>
-              </div>
-              <div className="h-1.5 w-full bg-slate-950 rounded-full overflow-hidden">
-                <div className="h-full bg-pink-500" style={{ width: `${(data.activityScore / 50) * 100}%` }} />
+                <div className="h-full bg-pink-500" style={{ width: `${(data.breakdown.activity / 100) * 100}%` }} />
               </div>
             </div>
 

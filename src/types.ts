@@ -137,3 +137,34 @@ export interface CarrierBillingState {
   status: 'unsubscribed' | 'otp_pending' | 'subscribed';
   transactionId?: string;
 }
+
+export interface Certificate {
+  id: string;
+  candidateId: string;
+  skillName: string;
+  score: number;
+  difficultyLevel: 'Beginner' | 'Intermediate' | 'Advanced' | 'Expert';
+  completionDate: string;
+  certificateId: string;
+}
+
+export interface AuthenticityReport {
+  id: string;
+  submissionId: string;
+  authenticityScore: number;
+  isLikelyAI: boolean;
+  duplicateDetected: boolean;
+  reasoning: string;
+}
+
+export interface CompanyReport {
+  id: string;
+  assessmentId: string;
+  candidateId: string;
+  skillScore: number;
+  qualityScore: number;
+  authenticityScore: number;
+  strengths: string[];
+  weaknesses: string[];
+  hiringRecommendation: string;
+}

@@ -214,3 +214,54 @@ export function useAICompanyInsightsMutation() {
     }
   });
 }
+
+export function useAIAuthenticityDetectionMutation() {
+  return useMutation({
+    mutationFn: async (payload: { submissionContent: string; previousSubmissionsContent?: string[] }) => {
+      const res = await fetch('/api/submissions/auth/authenticity', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      return res.json();
+    }
+  });
+}
+
+export function useAICompanyReportMutation() {
+  return useMutation({
+    mutationFn: async (payload: { candidateData: any; assessmentData: any; submissionData: any }) => {
+      const res = await fetch('/api/assessments/report/company-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      return res.json();
+    }
+  });
+}
+
+export function useGenerateCertificateMutation() {
+  return useMutation({
+    mutationFn: async (payload: { candidateId: string; skillName: string; score: number; difficultyLevel: string }) => {
+      const res = await fetch('/api/certificates/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      return res.json();
+    }
+  });
+}
+
+export function useVerifyCertificate(certificateId: string) {
+  return useQuery({
+    queryKey: ['certificate', certificateId],
+    queryFn: async () => {
+      const res = await fetch(`/api/certificates/verify/${certificateId}`);
+      if (!res.ok) throw new Error('Failed to verify certificate');
+      return res.json();
+    },
+    enabled: !!certificateId
+  });
+}

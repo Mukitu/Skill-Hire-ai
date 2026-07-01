@@ -247,7 +247,11 @@ export async function aiReputationScore(data: {
       activity
     },
     badge: totalScore > 800 ? 'Master Architect' : totalScore > 600 ? 'Rising Specialist' : 'Verified Practitioner',
-    summary: `Skill Reputation summary verified. The candidate has established a reputable baseline through verified skills, certificates, and coding portfolio linkages.`
+    summary: `Skill Reputation summary verified. The candidate has established a reputable baseline through verified skills, certificates, and coding portfolio linkages.`,
+    githubConnected: data.githubConnected,
+    portfolioConnected: data.portfolioConnected,
+    verifiedCount: data.attempts.filter(a => a.passed).length,
+    submissionCount: data.submissions.length
   };
 
   if (!isGroqConfigured()) {
@@ -262,7 +266,11 @@ export async function aiReputationScore(data: {
       { role: 'user', content: prompt.user }
     ], { temperature: 0.2, jsonMode: true });
 
-    return cleanAndParseJSON(result, defaultFallback);
+    const parsed = cleanAndParseJSON(result, defaultFallback);
+    return {
+      ...defaultFallback,
+      ...parsed
+    };
   } catch (err: any) {
     console.error('[AIService] AI Reputation Score failed:', err);
     return defaultFallback;
@@ -412,4 +420,68 @@ export async function aiCompanyInsights(
     console.error('[AIService] AI Company Insights failed:', err);
     return defaultFallback;
   }
+}
+
+export async function aiAuthenticityDetection(submissionContent: string, previousSubmissionsContent?: string[]): Promise<any> {
+  const prompt = `Analyze this candidate submission for authenticity.
+Submission:
+${submissionContent}
+
+${previousSubmissionsContent ? `Previous Submissions from others (to check for duplicates):
+${previousSubmissionsContent.join('\n\n')}` : ''}
+
+Evaluate if it is likely AI-generated or human-created. Look for typical AI patterns (e.g., overly formal, generic structure, lack of personal voice, perfect but soulless code/text).
+Also, determine if a duplicate is detected (based on previous submissions).
+
+Return a JSON object with this exact format:
+{
+  "authenticityScore": number (0-100, 100 means highly authentic/human),
+  "isLikelyAI": boolean,
+  "duplicateDetected": boolean,
+  "reasoning": "Detailed string explaining the reasoning"
+}`;
+
+  const response = await callGroqAPI([
+    { role: 'system', content: 'You are an expert AI and plagiarism detection system. Analyze the submission strictly and return ONLY JSON.' },
+    { role: 'user', content: prompt }
+  ], { temperature: 0.1 });
+
+  return cleanAndParseJSON(response, {
+    authenticityScore: 50,
+    isLikelyAI: false,
+    duplicateDetected: false,
+    reasoning: "Analysis failed to complete."
+  });
+}
+
+export async function aiCompanyReport(candidateData: any, assessmentData: any, submissionData: any): Promise<any> {
+  const prompt = `Generate a comprehensive hiring report for a company based on this candidate's assessment attempt.
+
+Candidate Data: ${JSON.stringify(candidateData)}
+Assessment Data: ${JSON.stringify(assessmentData)}
+Submission Data: ${JSON.stringify(submissionData)}
+
+Return a JSON object with this exact format:
+{
+  "skillScore": number (0-100),
+  "qualityScore": number (0-100),
+  "authenticityScore": number (0-100),
+  "strengths": ["string array"],
+  "weaknesses": ["string array"],
+  "hiringRecommendation": "A detailed paragraph summarizing whether to proceed with this candidate based on this specific assessment."
+}`;
+
+  const response = await callGroqAPI([
+    { role: 'system', content: 'You are an expert technical recruiter and evaluator. Return ONLY valid JSON.' },
+    { role: 'user', content: prompt }
+  ], { temperature: 0.3 });
+
+  return cleanAndParseJSON(response, {
+    skillScore: 0,
+    qualityScore: 0,
+    authenticityScore: 0,
+    strengths: [],
+    weaknesses: [],
+    hiringRecommendation: "Could not generate report."
+  });
 }

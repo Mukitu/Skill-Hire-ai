@@ -22,7 +22,9 @@ import {
   aiReputationScore,
   aiResumeAnalysis,
   aiCareerRoadmap,
-  aiCompanyInsights
+  aiCompanyInsights,
+  aiAuthenticityDetection,
+  aiCompanyReport
 } from './src/server/aiService';
 import { UserProfile, JobPost, SkillAssessment, AssessmentAttempt, MockInterviewSession, PracticalTask, TaskSubmission } from './src/types';
 import { 
@@ -378,6 +380,104 @@ async function startServer() {
       }
     }
     return res.json({ jobs: db.getJobs() });
+  });
+
+
+  // AI Skill Passport: Generate Certificate
+  app.post('/api/certificates/generate', async (req: Request, res: Response) => {
+    try {
+      const { candidateId, skillName, score, difficultyLevel } = req.body;
+      
+      const certificateId = 'CERT-' + Math.random().toString(36).substring(2, 10).toUpperCase();
+      const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=https://${req.get('host')}/verify/certificate/${certificateId}`;
+      
+      const certificate = {
+        id: certificateId,
+        candidate_id: candidateId,
+        skill_name: skillName,
+        score: score,
+        difficulty_level: difficultyLevel,
+        issued_date: new Date().toISOString(),
+        qr_code_url: qrCodeUrl
+      };
+
+      if (isSupabaseServerConfigured) {
+        const { error } = await supabaseServer.from('certificates').insert([certificate]);
+        if (error) {
+          console.error("Supabase insert certificate error:", error);
+          return res.status(500).json({ error: 'Failed to insert certificate' });
+        }
+      }
+
+      return res.json({ status: 'success', certificate });
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // AI Skill Passport: Verify Certificate
+  app.get('/api/public/verify-certificate/:hash', async (req: Request, res: Response) => {
+    try {
+      const { hash } = req.params;
+      
+      if (isSupabaseServerConfigured) {
+        // Find certificate
+        const { data: certData, error: certError } = await supabaseServer.from('certificates').select('*').eq('id', hash).single();
+        if (certError) {
+           return res.status(404).json({ status: 'error', message: 'Certificate not found' });
+        }
+        
+        // Find candidate
+        const { data: userData, error: userError } = await supabaseServer.from('users').select('*').eq('id', certData.candidate_id).single();
+        
+        const candidate = {
+          id: userData?.id,
+          name: userData?.name || 'Unknown Candidate',
+          email: userData?.email,
+          title: userData?.title
+        };
+
+        const mappedCert = {
+          id: certData.id,
+          skill: certData.skill_name,
+          score: certData.score,
+          date: certData.issued_date,
+          cert_hash: certData.id,
+        };
+
+        return res.json({ status: 'success', certificate: mappedCert, candidate: candidate });
+      } else {
+        return res.status(500).json({ status: 'error', message: 'Database not connected' });
+      }
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({ status: 'error', message: 'Internal server error' });
+    }
+  });
+
+  // AI Authenticity Detection
+  app.post('/api/submissions/auth/authenticity', async (req: Request, res: Response) => {
+    try {
+      const { submissionContent, previousSubmissionsContent } = req.body;
+      const data = await aiAuthenticityDetection(submissionContent, previousSubmissionsContent);
+      return res.json({ status: 'success', data });
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({ error: 'Failed to run authenticity detection' });
+    }
+  });
+
+  // AI Company Report
+  app.post('/api/assessments/report/company-report', async (req: Request, res: Response) => {
+    try {
+      const { candidateData, assessmentData, submissionData } = req.body;
+      const data = await aiCompanyReport(candidateData, assessmentData, submissionData);
+      return res.json({ status: 'success', data });
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({ error: 'Failed to generate company report' });
+    }
   });
 
   // Jobs: Create job

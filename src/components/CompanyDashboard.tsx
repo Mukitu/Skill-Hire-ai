@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import AICompanyInsights from './candidate/AICompanyInsights';
+import { AICandidateReport } from './company/AICandidateReport';
 import { UserProfile, JobPost, PracticalTask, MockInterviewSession } from '../types';
 import { useJobs, useCreateJobMutation, useGenerateTaskMutation, useGenerateJobTaskMutation, useCreateTaskMutation } from '../hooks/useQueries';
 
