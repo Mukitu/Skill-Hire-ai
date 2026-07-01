@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { UserProfile, JobPost, SkillAssessment, AssessmentAttempt, MockInterviewSession, PracticalTask, TaskSubmission } from '../types';
+import { UserProfile, JobPost, SkillAssessment, AssessmentAttempt, MockInterviewSession, PracticalTask, TaskSubmission, JobApplication, Interview, InterviewSummary } from '../types';
 
 const supabaseUrl = process.env.SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || '';
@@ -219,13 +219,120 @@ export async function createApplicationInSupabase(appId: string, jobId: string, 
         resume_text: resumeText,
         status: status,
         score: null,
-        feedback: null
+        feedback: null,
+        shortlisted: false
       });
 
     if (error) throw error;
     return data;
   } catch (err) {
     console.error('[Supabase Server] Failed to save application:', err);
+    return null;
+  }
+}
+
+export async function updateApplicationInSupabase(id: string, updates: Partial<JobApplication>) {
+  if (!supabaseServer) return null;
+  try {
+    const payload: any = {};
+    if (updates.status) payload.status = updates.status;
+    if (updates.score !== undefined) payload.score = updates.score;
+    if (updates.aiRanking !== undefined) payload.ai_ranking = updates.aiRanking;
+    if (updates.shortlisted !== undefined) payload.shortlisted = updates.shortlisted;
+    if (updates.matchScore !== undefined) payload.match_score = updates.matchScore;
+    if (updates.feedback) payload.feedback = updates.feedback;
+
+    const { data, error } = await supabaseServer
+      .from('applications')
+      .update(payload)
+      .eq('id', id);
+
+    if (error) throw error;
+    return data;
+  } catch (err) {
+    console.error('[Supabase Server] Failed to update application:', err);
+    return null;
+  }
+}
+
+// 7. Interviews
+export async function saveInterviewToSupabase(interview: Interview) {
+  if (!supabaseServer) return null;
+  try {
+    const { data, error } = await supabaseServer
+      .from('interviews')
+      .upsert({
+        id: interview.id,
+        job_id: interview.jobId,
+        candidate_id: interview.candidateId,
+        scheduled_at: interview.scheduledAt,
+        status: interview.status,
+        meeting_link: interview.meetingLink,
+        meeting_type: interview.meetingType,
+        difficulty_level: interview.difficultyLevel,
+        questions: interview.questions
+      });
+
+    if (error) throw error;
+    return data;
+  } catch (err) {
+    console.error('[Supabase Server] Failed to save interview:', err);
+    return null;
+  }
+}
+
+export async function getInterviewsForCompany(companyId: string) {
+  if (!supabaseServer) return [];
+  try {
+    // Join interviews with jobs to filter by companyId
+    const { data, error } = await supabaseServer
+      .from('interviews')
+      .select('*, jobs!inner(company_id)')
+      .eq('jobs.company_id', companyId);
+
+    if (error) throw error;
+    return data || [];
+  } catch (err) {
+    console.error('[Supabase Server] Failed to fetch interviews for company:', err);
+    return [];
+  }
+}
+
+export async function getInterviewsForCandidate(candidateId: string) {
+  if (!supabaseServer) return [];
+  try {
+    const { data, error } = await supabaseServer
+      .from('interviews')
+      .select('*')
+      .eq('candidate_id', candidateId);
+
+    if (error) throw error;
+    return data || [];
+  } catch (err) {
+    console.error('[Supabase Server] Failed to fetch interviews for candidate:', err);
+    return [];
+  }
+}
+
+export async function saveInterviewSummaryToSupabase(summary: InterviewSummary) {
+  if (!supabaseServer) return null;
+  try {
+    const { data, error } = await supabaseServer
+      .from('interview_summaries')
+      .upsert({
+        id: summary.id,
+        interview_id: summary.interviewId,
+        strengths: summary.strengths,
+        weaknesses: summary.weaknesses,
+        recommendation: summary.recommendation,
+        feedback: summary.feedback,
+        overall_score: summary.overallScore
+      });
+
+    if (error) throw error;
+    return data;
+  } catch (err) {
+    console.error('[Supabase Server] Failed to save interview summary:', err);
     return null;
   }
 }

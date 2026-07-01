@@ -14,7 +14,19 @@ import { motion, AnimatePresence } from 'motion/react';
 import AICompanyInsights from './candidate/AICompanyInsights';
 import { AICandidateReport } from './company/AICandidateReport';
 import { UserProfile, JobPost, PracticalTask, MockInterviewSession } from '../types';
-import { useJobs, useCreateJobMutation, useGenerateTaskMutation, useGenerateJobTaskMutation, useCreateTaskMutation } from '../hooks/useQueries';
+import { 
+  useJobs, 
+  useCreateJobMutation, 
+  useGenerateTaskMutation, 
+  useGenerateJobTaskMutation, 
+  useCreateTaskMutation,
+  useRankCandidatesMutation,
+  useShortlistCandidatesMutation,
+  useGenerateInterviewMutation,
+  useScheduleInterviewMutation,
+  useSubmitInterviewSummaryMutation,
+  useInterviewsQuery
+} from '../hooks/useQueries';
 
 // Zod Validation Schema for Job Posting
 const jobPostSchema = z.object({
@@ -90,6 +102,24 @@ export default function CompanyDashboard({ user }: CompanyDashboardProps) {
   const generateTaskMutation = useGenerateTaskMutation();
   const generateJobTaskMutation = useGenerateJobTaskMutation();
   const createTaskMutation = useCreateTaskMutation();
+
+  const rankCandidatesMutation = useRankCandidatesMutation();
+  const shortlistCandidatesMutation = useShortlistCandidatesMutation();
+  const generateInterviewMutation = useGenerateInterviewMutation();
+  const scheduleInterviewMutation = useScheduleInterviewMutation();
+  const submitInterviewSummaryMutation = useSubmitInterviewSummaryMutation();
+
+  const [hiringEngineJobId, setHiringEngineJobId] = useState<string>('');
+  const [isInterviewModalOpen, setIsInterviewModalOpen] = useState(false);
+  const [interviewCandidate, setInterviewCandidate] = useState<UserProfile | null>(null);
+  const [interviewDifficulty, setInterviewDifficulty] = useState('Intermediate');
+  const [generatedQuestions, setGeneratedQuestions] = useState<string[]>([]);
+  const [interviewScheduling, setInterviewScheduling] = useState(false);
+  const [meetingType, setMeetingType] = useState('zoom');
+  const [scheduledAt, setScheduledAt] = useState('');
+  const [meetingLink, setMeetingLink] = useState('');
+
+  const { data: realInterviews } = useInterviewsQuery('company', user.id);
 
   const submittingJob = createJobMutation.isPending;
   const generatingTask = generateTaskMutation.isPending;
@@ -356,6 +386,7 @@ export default function CompanyDashboard({ user }: CompanyDashboardProps) {
               { id: 'create_job', label: 'Broadcast Job', icon: Plus },
               { id: 'manage_jobs', label: 'Positions Manager', icon: Briefcase },
               { id: 'applicants', label: 'Applicants Tracker', icon: FileSpreadsheet, badge: applications.filter(a => a.status === 'Applied').length },
+              { id: 'hiring_hub', label: 'AI Hiring Engine', icon: Sparkles },
               { id: 'candidates', label: 'Talent Directory', icon: Users },
               { id: 'interviews', label: 'Simulated Panel Logs', icon: MessageSquare, badge: interviews.length },
               { id: 'analytics', label: 'Performance Analytics', icon: BarChart2 },
@@ -1511,6 +1542,225 @@ export default function CompanyDashboard({ user }: CompanyDashboardProps) {
             </motion.div>
           )}
 
+          {/* TAB: AI HIRING ENGINE HUB */}
+          {activeTab === 'hiring_hub' && (
+            <motion.div 
+              key="hiring_hub"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              className="space-y-6"
+            >
+              <div className="bg-[#0D1117] border border-slate-800 p-6 rounded-2xl">
+                <div className="flex items-center justify-between mb-8">
+                  <div>
+                    <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                      <Sparkles className="w-5 h-5 text-indigo-400" />
+                      AI Hiring Engine Hub
+                    </h2>
+                    <p className="text-xs text-slate-400 mt-1">
+                      Orchestrate high-volume recruitment with AI Ranking, Auto-Shortlisting, and Interview Synthesis.
+                    </p>
+                  </div>
+                  <select 
+                    value={hiringEngineJobId}
+                    onChange={(e) => setHiringEngineJobId(e.target.value)}
+                    className="bg-slate-900 border border-slate-800 p-2 rounded-xl text-xs text-white outline-none focus:border-indigo-500"
+                  >
+                    <option value="">Select Target Position...</option>
+                    {jobs.map(j => (
+                      <option key={j.id} value={j.id}>{j.title}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {!hiringEngineJobId ? (
+                  <div className="text-center py-20 border-2 border-dashed border-slate-800 rounded-2xl bg-slate-900/20">
+                    <Briefcase className="w-12 h-12 text-slate-700 mx-auto mb-4" />
+                    <h3 className="text-sm font-bold text-slate-400">Target Position Not Selected</h3>
+                    <p className="text-xs text-slate-500 mt-1">Select a job from the dropdown above to engage the hiring engine.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    {/* Control Panel */}
+                    <div className="lg:col-span-1 space-y-4">
+                      <div className="bg-slate-900/50 border border-slate-800 p-5 rounded-2xl">
+                        <h3 className="text-xs font-bold text-slate-300 uppercase mb-4">Automation Matrix</h3>
+                        <div className="space-y-3">
+                          <button 
+                            onClick={() => rankCandidatesMutation.mutate({ jobId: hiringEngineJobId })}
+                            disabled={rankCandidatesMutation.isPending}
+                            className="w-full flex items-center justify-between p-3 bg-indigo-500/10 border border-indigo-500/20 hover:bg-indigo-500/20 rounded-xl text-xs font-bold text-indigo-300 transition-all group"
+                          >
+                            <div className="flex items-center gap-2">
+                              {rankCandidatesMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <BarChart2 className="w-4 h-4" />}
+                              <span>AI Candidate Ranking</span>
+                            </div>
+                            <ArrowUpRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-all" />
+                          </button>
+
+                          <button 
+                            onClick={() => shortlistCandidatesMutation.mutate({ jobId: hiringEngineJobId })}
+                            disabled={shortlistCandidatesMutation.isPending}
+                            className="w-full flex items-center justify-between p-3 bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20 rounded-xl text-xs font-bold text-emerald-300 transition-all group"
+                          >
+                            <div className="flex items-center gap-2">
+                              {shortlistCandidatesMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Shield className="w-4 h-4" />}
+                              <span>AI Auto-Shortlisting</span>
+                            </div>
+                            <ArrowUpRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-all" />
+                          </button>
+                        </div>
+                        <div className="mt-6 p-4 bg-slate-950/50 rounded-xl border border-slate-800/40">
+                          <h4 className="text-[10px] font-bold text-slate-500 uppercase mb-2">Engine Intelligence Status</h4>
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]" />
+                            <span className="text-[10px] text-emerald-400 font-mono">GROQ-ULTRA V4.2 ACTIVE</span>
+                          </div>
+                          <p className="text-[9px] text-slate-500 leading-relaxed italic">
+                            Ranking is calculated based on AI Reputation Score, Match Percent, and Assessment performance.
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Scheduled Interviews List */}
+                      <div className="bg-slate-900/50 border border-slate-800 p-5 rounded-2xl">
+                        <h3 className="text-xs font-bold text-slate-300 uppercase mb-4 flex items-center justify-between">
+                          Upcoming Interviews
+                          <span className="text-[10px] bg-indigo-500/20 text-indigo-400 px-1.5 py-0.5 rounded font-mono">
+                            {(realInterviews || []).length}
+                          </span>
+                        </h3>
+                        <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                          {realInterviews && realInterviews.length > 0 ? realInterviews.map((int: any) => {
+                            const cand = candidates.find(c => c.id === int.candidate_id);
+                            return (
+                              <div key={int.id} className="p-3 bg-slate-950 border border-slate-800/50 rounded-xl space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[11px] font-bold text-white">{cand?.name || 'Candidate'}</span>
+                                  <span className="text-[9px] text-slate-500 font-mono">{new Date(int.scheduled_at).toLocaleDateString()}</span>
+                                </div>
+                                <div className="flex items-center gap-2 text-[10px]">
+                                  <Calendar className="w-3 h-3 text-indigo-400" />
+                                  <span className="text-slate-400">{new Date(int.scheduled_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                </div>
+                                <a 
+                                  href={int.meeting_link} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer"
+                                  className="block w-full text-center py-1.5 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 text-[10px] font-bold rounded-lg transition-all"
+                                >
+                                  Join {int.meeting_type}
+                                </a>
+                              </div>
+                            );
+                          }) : (
+                            <div className="text-center py-6 text-slate-600 italic text-[10px]">
+                              No interviews scheduled yet.
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Applicants Ranking Feed */}
+                    <div className="lg:col-span-2">
+                      <div className="bg-slate-900/30 border border-slate-800 rounded-2xl overflow-hidden">
+                        <div className="p-4 border-b border-slate-800 bg-slate-900/50 flex items-center justify-between">
+                          <h3 className="text-xs font-bold text-slate-300 uppercase">Engine Ranked Applicants</h3>
+                          <div className="flex items-center gap-4 text-[10px]">
+                            <div className="flex items-center gap-1.5">
+                              <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                              <span className="text-slate-400">Shortlisted</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <div className="w-2 h-2 rounded-full bg-indigo-500" />
+                              <span className="text-slate-400">Candidate</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="divide-y divide-slate-800">
+                          {applications.filter(a => a.jobId === hiringEngineJobId).sort((a, b) => (b.aiRanking || 0) - (a.aiRanking || 0)).map((app, idx) => {
+                            const cand = candidates.find(c => c.id === app.candidateId);
+                            return (
+                              <div key={app.id} className="p-4 hover:bg-slate-900/40 transition-all group">
+                                <div className="flex items-start justify-between">
+                                  <div className="flex gap-4">
+                                    <div className="w-10 h-10 rounded-xl bg-slate-800 flex items-center justify-center font-bold text-slate-500 border border-slate-700">
+                                      {idx + 1}
+                                    </div>
+                                    <div>
+                                      <div className="flex items-center gap-2">
+                                        <h4 className="text-sm font-bold text-white">{cand?.name}</h4>
+                                        {app.shortlisted && (
+                                          <div className="bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase font-mono tracking-tight">
+                                            Shortlisted
+                                          </div>
+                                        )}
+                                      </div>
+                                      <p className="text-xs text-slate-500 mb-2">{cand?.title}</p>
+                                      <div className="flex flex-wrap gap-2">
+                                        <div className="flex items-center gap-1 px-2 py-0.5 bg-slate-900 rounded-full border border-slate-800">
+                                          <TrendingUp className="w-3 h-3 text-indigo-400" />
+                                          <span className="text-[10px] text-slate-400 font-mono">Match: {app.matchScore || 0}%</span>
+                                        </div>
+                                        <div className="flex items-center gap-1 px-2 py-0.5 bg-slate-900 rounded-full border border-slate-800">
+                                          <Award className="w-3 h-3 text-amber-400" />
+                                          <span className="text-[10px] text-slate-400 font-mono">Rep: {cand?.reputationScore || 300}</span>
+                                        </div>
+                                        {app.aiRanking && (
+                                          <div className="flex items-center gap-1 px-2 py-0.5 bg-indigo-500/10 rounded-full border border-indigo-500/20">
+                                            <Sparkles className="w-3 h-3 text-indigo-400" />
+                                            <span className="text-[10px] text-indigo-300 font-mono font-bold">AI RANK: {app.aiRanking}</span>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <div className="flex flex-col items-end gap-2">
+                                    <button 
+                                      onClick={() => {
+                                        setInterviewCandidate(cand!);
+                                        setIsInterviewModalOpen(true);
+                                      }}
+                                      className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-bold rounded-lg transition-all"
+                                    >
+                                      <Calendar className="w-3 h-3" />
+                                      Schedule Interview
+                                    </button>
+                                    <button 
+                                      className="text-[10px] text-slate-500 hover:text-white transition-all flex items-center gap-1"
+                                      onClick={() => {
+                                        setInspectingApp(app);
+                                        setSelectedCandidate(cand!);
+                                        setActiveTab('applicants');
+                                      }}
+                                    >
+                                      <Eye className="w-3 h-3" />
+                                      Full Report
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+
+                          {applications.filter(a => a.jobId === hiringEngineJobId).length === 0 && (
+                            <div className="p-20 text-center text-slate-600 italic text-xs">
+                              No applicants found for this position.
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          )}
+
           {/* TAB: SETTINGS */}
           {activeTab === 'settings' && (
             <motion.div 
@@ -1763,7 +2013,154 @@ export default function CompanyDashboard({ user }: CompanyDashboardProps) {
         )}
       </AnimatePresence>
 
-      {/* AI JOB TASK GENERATOR MODAL */}
+      {/* AI INTERVIEW SCHEDULING MODAL */}
+      <AnimatePresence>
+        {isInterviewModalOpen && interviewCandidate && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md"
+          >
+            <motion.div 
+              initial={{ scale: 0.95 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.95 }}
+              className="bg-[#0D1117] border border-slate-800 rounded-3xl p-6 max-w-xl w-full max-h-[90vh] overflow-y-auto space-y-6 relative"
+            >
+              <button 
+                onClick={() => {
+                  setIsInterviewModalOpen(false);
+                  setGeneratedQuestions([]);
+                }}
+                className="absolute top-4 right-4 p-2 bg-slate-900/60 hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-white rounded-xl transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+
+              <div className="flex items-center gap-3 border-b border-slate-800/60 pb-4">
+                <div className="p-2.5 bg-indigo-500/10 rounded-xl border border-indigo-500/20">
+                  <Calendar className="w-5 h-5 text-indigo-400" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-black text-white font-display">AI Interview Synthesis</h2>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Generate personalized deep-dive questions and schedule technical sessions.
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                {/* Stage 1: Generate Questions */}
+                <div className="p-4 bg-slate-900/50 rounded-2xl border border-slate-800 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xs font-bold text-slate-300 uppercase">1. Question Generation</h3>
+                    <select 
+                      value={interviewDifficulty}
+                      onChange={(e) => setInterviewDifficulty(e.target.value)}
+                      className="bg-slate-950 border border-slate-800 text-[10px] text-slate-400 rounded p-1 outline-none"
+                    >
+                      <option>Beginner</option>
+                      <option>Intermediate</option>
+                      <option>Advanced</option>
+                      <option>Expert</option>
+                    </select>
+                  </div>
+                  
+                  <button 
+                    onClick={() => generateInterviewMutation.mutate({ 
+                      jobId: hiringEngineJobId, 
+                      candidateId: interviewCandidate.id, 
+                      difficulty: interviewDifficulty 
+                    }, {
+                      onSuccess: (data) => setGeneratedQuestions(data.questions || [])
+                    })}
+                    disabled={generateInterviewMutation.isPending}
+                    className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-bold rounded-lg flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+                  >
+                    {generateInterviewMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                    Generate {interviewDifficulty} Questions
+                  </button>
+
+                  {generatedQuestions.length > 0 && (
+                    <div className="space-y-2 mt-4">
+                      {generatedQuestions.map((q, i) => (
+                        <div key={i} className="p-2.5 bg-slate-950 border border-slate-850 rounded-xl text-[10px] text-slate-300 leading-relaxed italic">
+                          {q}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Stage 2: Schedule */}
+                {generatedQuestions.length > 0 && (
+                  <div className="p-4 bg-slate-900/50 rounded-2xl border border-slate-800 space-y-4">
+                    <h3 className="text-xs font-bold text-slate-300 uppercase">2. Logistics & Delivery</h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[10px] text-slate-500 uppercase mb-1 font-bold">Session Timestamp</label>
+                        <input 
+                          type="datetime-local" 
+                          value={scheduledAt}
+                          onChange={(e) => setScheduledAt(e.target.value)}
+                          className="w-full bg-slate-950 border border-slate-800 p-2 rounded-lg text-[11px] text-white outline-none focus:border-indigo-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] text-slate-500 uppercase mb-1 font-bold">Panel Type</label>
+                        <select 
+                          value={meetingType}
+                          onChange={(e) => setMeetingType(e.target.value)}
+                          className="w-full bg-slate-950 border border-slate-800 p-2 rounded-lg text-[11px] text-white outline-none focus:border-indigo-500"
+                        >
+                          <option value="zoom">Zoom Video</option>
+                          <option value="google_meet">Google Meet</option>
+                          <option value="custom">Custom Bridge Link</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-slate-500 uppercase mb-1 font-bold">Meeting URI</label>
+                      <input 
+                        type="url" 
+                        placeholder="https://..."
+                        value={meetingLink}
+                        onChange={(e) => setMeetingLink(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-800 p-2 rounded-lg text-[11px] text-white outline-none focus:border-indigo-500"
+                      />
+                    </div>
+
+                    <button 
+                      onClick={() => scheduleInterviewMutation.mutate({
+                        jobId: hiringEngineJobId,
+                        candidateId: interviewCandidate.id,
+                        scheduledAt,
+                        meetingType,
+                        meetingLink,
+                        difficultyLevel: interviewDifficulty,
+                        questions: generatedQuestions
+                      }, {
+                        onSuccess: () => {
+                          setIsInterviewModalOpen(false);
+                          setGeneratedQuestions([]);
+                          setScheduledAt('');
+                          setMeetingLink('');
+                        }
+                      })}
+                      disabled={scheduleInterviewMutation.isPending || !scheduledAt || !meetingLink}
+                      className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+                    >
+                      {scheduleInterviewMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                      Finalize & Send Invite
+                    </button>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       <AnimatePresence>
         {isJobTaskModalOpen && (
           <motion.div 

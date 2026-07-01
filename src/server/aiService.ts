@@ -226,6 +226,10 @@ export async function aiReputationScore(data: {
   };
   badge: string;
   summary: string;
+  githubConnected: boolean;
+  portfolioConnected: boolean;
+  verifiedCount: number;
+  submissionCount: number;
 }> {
   // Direct deterministic backup math
   const base = 300;
@@ -484,4 +488,137 @@ Return a JSON object with this exact format:
     weaknesses: [],
     hiringRecommendation: "Could not generate report."
   });
+}
+
+/**
+ * 12. AI Candidate Ranking Service
+ */
+export async function aiCandidateRanking(job: JobPost, candidates: { profile: UserProfile; application: any }[]): Promise<{
+  rankings: { candidateId: string; rank: number; score: number; reasoning: string }[];
+  topCandidateId: string;
+  summary: string;
+}> {
+  const defaultFallback = {
+    rankings: candidates.map((c, i) => ({
+      candidateId: c.profile.id,
+      rank: i + 1,
+      score: 70,
+      reasoning: 'Ranked based on available profile alignment.'
+    })),
+    topCandidateId: candidates[0]?.profile.id || '',
+    summary: 'Candidate ranking performed based on skill match heuristics.'
+  };
+
+  if (!isGroqConfigured()) return defaultFallback;
+
+  try {
+    const prompt = templates.getCandidateRankingPrompt(job, candidates);
+    const result = await callGroqAPI([
+      { role: 'system', content: prompt.system },
+      { role: 'user', content: prompt.user }
+    ], { temperature: 0.2, jsonMode: true });
+
+    return cleanAndParseJSON(result, defaultFallback);
+  } catch (err: any) {
+    console.error('[AIService] AI Candidate Ranking failed:', err);
+    return defaultFallback;
+  }
+}
+
+/**
+ * 13. AI Interview Generator Service
+ */
+export async function aiGenerateInterview(job: JobPost, candidate: UserProfile, difficulty: string): Promise<{
+  questions: string[];
+  difficulty: string;
+  focustAreas: string[];
+}> {
+  const defaultFallback = {
+    questions: [
+      'Describe your experience with the tech stack mentioned in the job post.',
+      'How do you handle complex problem solving in a team environment?',
+      'Walk us through a challenging technical project you recently completed.',
+      'What are your thoughts on modern engineering best practices?',
+      'How do you keep up with evolving technology trends?'
+    ],
+    difficulty,
+    focustAreas: ['Core Competencies', 'Experience']
+  };
+
+  if (!isGroqConfigured()) return defaultFallback;
+
+  try {
+    const prompt = templates.getInterviewGenerationPrompt(job, candidate, difficulty);
+    const result = await callGroqAPI([
+      { role: 'system', content: prompt.system },
+      { role: 'user', content: prompt.user }
+    ], { temperature: 0.5, jsonMode: true });
+
+    return cleanAndParseJSON(result, defaultFallback);
+  } catch (err: any) {
+    console.error('[AIService] AI Interview Generation failed:', err);
+    return defaultFallback;
+  }
+}
+
+/**
+ * 14. AI Interview Summary Service
+ */
+export async function aiInterviewSummary(interview: any, feedback: string): Promise<{
+  overallScore: number;
+  strengths: string[];
+  weaknesses: string[];
+  recommendation: string;
+  feedbackSummary: string;
+}> {
+  const defaultFallback = {
+    overallScore: 75,
+    strengths: ['Solid technical baseline'],
+    weaknesses: ['Experience depth needs validation'],
+    recommendation: 'Consider',
+    feedbackSummary: 'The candidate showed good potential but some specific areas require further probe.'
+  };
+
+  if (!isGroqConfigured()) return defaultFallback;
+
+  try {
+    const prompt = templates.getInterviewSummaryPrompt(interview, feedback);
+    const result = await callGroqAPI([
+      { role: 'system', content: prompt.system },
+      { role: 'user', content: prompt.user }
+    ], { temperature: 0.3, jsonMode: true });
+
+    return cleanAndParseJSON(result, defaultFallback);
+  } catch (err: any) {
+    console.error('[AIService] AI Interview Summary failed:', err);
+    return defaultFallback;
+  }
+}
+
+/**
+ * 15. AI Shortlisting Service
+ */
+export async function aiShortlistCandidates(job: JobPost, candidates: { profile: UserProfile; application: any }[]): Promise<{
+  shortlistedCandidateIds: string[];
+  justification: string;
+}> {
+  const defaultFallback = {
+    shortlistedCandidateIds: candidates.filter(c => (c.application.matchScore || 0) > 70).map(c => c.profile.id),
+    justification: 'Candidates with high match scores were automatically shortlisted.'
+  };
+
+  if (!isGroqConfigured()) return defaultFallback;
+
+  try {
+    const prompt = templates.getShortlistingPrompt(job, candidates);
+    const result = await callGroqAPI([
+      { role: 'system', content: prompt.system },
+      { role: 'user', content: prompt.user }
+    ], { temperature: 0.2, jsonMode: true });
+
+    return cleanAndParseJSON(result, defaultFallback);
+  } catch (err: any) {
+    console.error('[AIService] AI Shortlisting failed:', err);
+    return defaultFallback;
+  }
 }

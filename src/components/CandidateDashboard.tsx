@@ -13,10 +13,11 @@ import {
   useScanResumeMutation,
   useGenerateCustomQuizMutation,
   useSubmitQuizMutation,
-  useGenerateInterviewMutation,
+  useGenerateMockInterviewMutation,
   useEvaluateInterviewMutation,
   useSubmitCodeMutation,
-  useGenerateCertificateMutation
+  useGenerateCertificateMutation,
+  useInterviewsQuery
 } from '../hooks/useQueries';
 
 // Modular Sub-components
@@ -48,6 +49,8 @@ export default function CandidateDashboard({ user, onOpenSubscribe }: CandidateD
   };
 
   const { syncProfile, setCurrentUser } = useAppStore();
+
+  const { data: realInterviews, isLoading: loadingInterviews } = useInterviewsQuery('candidate', user.id);
 
   // Custom data states (applications, notifications, certificates)
   const [applications, setApplications] = useState<any[]>([]);
@@ -284,15 +287,15 @@ export default function CandidateDashboard({ user, onOpenSubscribe }: CandidateD
     });
   };
 
-  const generateInterviewMutation = useGenerateInterviewMutation();
-  const generatingInterview = generateInterviewMutation.isPending;
+  const generateMockInterviewMutation = useGenerateMockInterviewMutation();
+  const generatingInterview = generateMockInterviewMutation.isPending;
 
   const handleGenerateInterview = async () => {
     setActiveInterview(null);
     setInterviewAnswers({});
     setCurrentAnswer('');
 
-    generateInterviewMutation.mutate({
+    generateMockInterviewMutation.mutate({
       candidateId: user.id,
       jobTitle: interviewJobTitle,
       candidateProfile: `Name: ${user.name}, Title: ${user.title}, Skills: ${user.skills.join(', ')}`
@@ -528,6 +531,7 @@ export default function CandidateDashboard({ user, onOpenSubscribe }: CandidateD
             applications={applications}
             certificates={certificates}
             notifications={notifications}
+            interviews={realInterviews || []}
             onNavigateTab={setActiveTab}
             onMarkRead={handleMarkRead}
           />

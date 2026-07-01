@@ -7,13 +7,16 @@ interface OverviewProps {
   applications: any[];
   certificates: any[];
   notifications: any[];
+  interviews: any[];
   onNavigateTab: (tab: string) => void;
   onMarkRead: (id: string) => void;
 }
 
-export default function Overview({ user, applications, certificates, notifications, onNavigateTab, onMarkRead }: OverviewProps) {
+export default function Overview({ user, applications, certificates, notifications, interviews, onNavigateTab, onMarkRead }: OverviewProps) {
   const unreadCount = notifications.filter(n => !n.read).length;
   const passedSkillsCount = Object.keys(user.verifiedSkills || {}).length;
+
+  const upcomingInterviews = (interviews || []).filter(i => new Date(i.scheduled_at) > new Date()).sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime());
 
   return (
     <div className="space-y-6">
@@ -133,51 +136,85 @@ export default function Overview({ user, applications, certificates, notificatio
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         {/* Recent Alerts Feed */}
-        <div className="lg:col-span-2 bg-[#0D1117] border border-slate-800 p-6 rounded-2xl shadow-xl space-y-4">
-          <div className="flex justify-between items-center pb-2.5 border-b border-slate-800">
-            <div className="flex items-center gap-2">
-              <Bell className="w-4 h-4 text-teal-400" />
-              <h3 className="font-extrabold text-sm text-white uppercase tracking-wide">Recent Security & Activity Alerts</h3>
+        <div className="lg:col-span-2 space-y-6">
+          <div className="bg-[#0D1117] border border-slate-800 p-6 rounded-2xl shadow-xl space-y-4">
+            <div className="flex justify-between items-center pb-2.5 border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <Bell className="w-4 h-4 text-teal-400" />
+                <h3 className="font-extrabold text-sm text-white uppercase tracking-wide">Recent Security & Activity Alerts</h3>
+              </div>
+              {unreadCount > 0 && (
+                <span className="text-[10px] font-mono px-2 py-0.5 bg-teal-400/10 border border-teal-400/20 text-teal-400 font-bold rounded-full">
+                  {unreadCount} Unread
+                </span>
+              )}
             </div>
-            {unreadCount > 0 && (
-              <span className="text-[10px] font-mono px-2 py-0.5 bg-teal-400/10 border border-teal-400/20 text-teal-400 font-bold rounded-full">
-                {unreadCount} Unread
-              </span>
+
+            {notifications.length === 0 ? (
+              <div className="text-center py-10 text-slate-500 text-xs italic">
+                No recent notifications or status reports.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {notifications.slice(0, 3).map((n) => (
+                  <div key={n.id} className="relative p-4 rounded-xl bg-slate-950/60 border border-slate-800/80 flex justify-between items-start gap-4">
+                    {!n.read && (
+                      <span className="absolute top-4 left-2 w-1.5 h-1.5 rounded-full bg-teal-400 animate-pulse" />
+                    )}
+                    <div className="pl-2 space-y-1">
+                      <p className="text-xs font-bold text-white leading-relaxed">{n.title}</p>
+                      <p className="text-[11px] text-slate-400 leading-normal">{n.message}</p>
+                      <p className="text-[9px] text-slate-600 font-mono">{new Date(n.created_at || n.date || Date.now()).toLocaleDateString()} at {new Date(n.created_at || n.date || Date.now()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
+                    </div>
+                    {!n.read && (
+                      <button 
+                        onClick={() => onMarkRead(n.id)}
+                        className="text-[10px] font-bold font-mono text-teal-400 hover:text-white bg-teal-400/10 border border-teal-400/20 hover:bg-teal-500 rounded px-2.5 py-1 cursor-pointer transition-colors shrink-0"
+                      >
+                        Read
+                      </button>
+                    )}
+                  </div>
+                ))}
+                <button 
+                  onClick={() => onNavigateTab('notifications')}
+                  className="w-full text-center py-2 border border-slate-800 bg-slate-950/30 hover:bg-slate-900/40 text-xs text-slate-400 font-semibold rounded-lg transition-colors cursor-pointer"
+                >
+                  View All Notifications ({notifications.length})
+                </button>
+              </div>
             )}
           </div>
 
-          {notifications.length === 0 ? (
-            <div className="text-center py-10 text-slate-500 text-xs italic">
-              No recent notifications or status reports.
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {notifications.slice(0, 3).map((n) => (
-                <div key={n.id} className="relative p-4 rounded-xl bg-slate-950/60 border border-slate-800/80 flex justify-between items-start gap-4">
-                  {!n.read && (
-                    <span className="absolute top-4 left-2 w-1.5 h-1.5 rounded-full bg-teal-400 animate-pulse" />
-                  )}
-                  <div className="pl-2 space-y-1">
-                    <p className="text-xs font-bold text-white leading-relaxed">{n.title}</p>
-                    <p className="text-[11px] text-slate-400 leading-normal">{n.message}</p>
-                    <p className="text-[9px] text-slate-600 font-mono">{new Date(n.created_at || n.date || Date.now()).toLocaleDateString()} at {new Date(n.created_at || n.date || Date.now()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
-                  </div>
-                  {!n.read && (
-                    <button 
-                      onClick={() => onMarkRead(n.id)}
-                      className="text-[10px] font-bold font-mono text-teal-400 hover:text-white bg-teal-400/10 border border-teal-400/20 hover:bg-teal-500 rounded px-2.5 py-1 cursor-pointer transition-colors shrink-0"
-                    >
-                      Read
-                    </button>
-                  )}
+          {/* Upcoming Interviews */}
+          {upcomingInterviews.length > 0 && (
+            <div className="bg-[#0D1117] border border-slate-800 p-6 rounded-2xl shadow-xl space-y-4">
+              <div className="flex justify-between items-center pb-2.5 border-b border-slate-800">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-indigo-400" />
+                  <h3 className="font-extrabold text-sm text-white uppercase tracking-wide">Upcoming Official Interviews</h3>
                 </div>
-              ))}
-              <button 
-                onClick={() => onNavigateTab('notifications')}
-                className="w-full text-center py-2 border border-slate-800 bg-slate-950/30 hover:bg-slate-900/40 text-xs text-slate-400 font-semibold rounded-lg transition-colors cursor-pointer"
-              >
-                View All Notifications ({notifications.length})
-              </button>
+              </div>
+              <div className="space-y-3">
+                {upcomingInterviews.map((int) => (
+                  <div key={int.id} className="p-4 rounded-xl bg-slate-950/60 border border-indigo-500/20 flex justify-between items-center gap-4">
+                    <div className="space-y-1">
+                      <p className="text-xs font-bold text-white">{int.difficulty_level} Technical Panel</p>
+                      <p className="text-[10px] text-slate-400 font-mono">
+                        {new Date(int.scheduled_at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
+                      </p>
+                    </div>
+                    <a 
+                      href={int.meeting_link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-bold rounded-lg transition-all"
+                    >
+                      Join {int.meeting_type === 'google_meet' ? 'Meet' : 'Zoom'}
+                    </a>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>

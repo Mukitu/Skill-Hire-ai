@@ -148,13 +148,44 @@ export interface Certificate {
   certificateId: string;
 }
 
-export interface AuthenticityReport {
+export interface JobApplication {
   id: string;
-  submissionId: string;
-  authenticityScore: number;
-  isLikelyAI: boolean;
-  duplicateDetected: boolean;
-  reasoning: string;
+  jobId: string;
+  candidateId: string;
+  resumeText: string;
+  status: 'applied' | 'reviewing' | 'interviewing' | 'accepted' | 'rejected' | 'shortlisted';
+  score?: number;
+  aiRanking?: number;
+  shortlisted?: boolean;
+  matchScore?: number;
+  feedback?: string;
+  createdAt: string;
+  companyName?: string;
+  jobTitle?: string;
+}
+
+export interface Interview {
+  id: string;
+  jobId: string;
+  candidateId: string;
+  scheduledAt: string;
+  status: 'scheduled' | 'completed' | 'cancelled';
+  meetingLink: string;
+  meetingType: 'zoom' | 'google_meet' | 'custom';
+  difficultyLevel: 'Beginner' | 'Intermediate' | 'Advanced' | 'Expert';
+  questions: string[];
+  createdAt: string;
+}
+
+export interface InterviewSummary {
+  id: string;
+  interviewId: string;
+  strengths: string[];
+  weaknesses: string[];
+  recommendation: string;
+  feedback: string;
+  overallScore: number;
+  createdAt: string;
 }
 
 export interface CompanyReport {

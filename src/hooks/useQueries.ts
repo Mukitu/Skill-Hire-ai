@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { UserProfile, JobPost, SkillAssessment, AssessmentAttempt, PracticalTask, TaskSubmission, MockInterviewSession } from '../types';
+import { UserProfile, JobPost, SkillAssessment, AssessmentAttempt, PracticalTask, TaskSubmission, MockInterviewSession, Interview, InterviewSummary } from '../types';
 
 // Fetchers
 const fetchAssessments = async (): Promise<SkillAssessment[]> => {
@@ -150,7 +150,7 @@ export function useSubmitQuizMutation() {
   });
 }
 
-export function useGenerateInterviewMutation() {
+export function useGenerateMockInterviewMutation() {
   return useMutation<any, Error, { candidateId: string; jobTitle: string; candidateProfile: string }>({
     mutationFn: async (payload) => {
       const res = await fetch('/api/interviews/generate', {
@@ -218,5 +218,106 @@ export function useScanResumeMutation() {
       });
       return res.json();
     },
+  });
+}
+
+export function useRankCandidatesMutation() {
+  const queryClient = useQueryClient();
+  return useMutation<any, Error, { jobId: string }>({
+    mutationFn: async (payload) => {
+      const res = await fetch('/api/ai/rank-candidates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['applications'] });
+    },
+  });
+}
+
+export function useShortlistCandidatesMutation() {
+  const queryClient = useQueryClient();
+  return useMutation<any, Error, { jobId: string }>({
+    mutationFn: async (payload) => {
+      const res = await fetch('/api/ai/shortlist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['applications'] });
+    },
+  });
+}
+
+export function useGenerateInterviewMutation() {
+  return useMutation<any, Error, { jobId: string; candidateId: string; difficulty: string }>({
+    mutationFn: async (payload) => {
+      const res = await fetch('/api/ai/generate-interview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      return res.json();
+    },
+  });
+}
+
+export function useScheduleInterviewMutation() {
+  const queryClient = useQueryClient();
+  return useMutation<any, Error, { 
+    jobId: string; 
+    candidateId: string; 
+    scheduledAt: string; 
+    meetingType: string; 
+    meetingLink: string; 
+    difficultyLevel: string;
+    questions: string[];
+  }>({
+    mutationFn: async (payload) => {
+      const res = await fetch('/api/interviews/schedule', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['interviews'] });
+    },
+  });
+}
+
+export function useSubmitInterviewSummaryMutation() {
+  const queryClient = useQueryClient();
+  return useMutation<any, Error, { interviewId: string; feedback: string }>({
+    mutationFn: async (payload) => {
+      const res = await fetch('/api/ai/interview-summary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['interviews'] });
+    },
+  });
+}
+
+export function useInterviewsQuery(role: 'company' | 'candidate', id: string) {
+  return useQuery<Interview[]>({
+    queryKey: ['interviews', role, id],
+    queryFn: async () => {
+      const res = await fetch(`/api/interviews/${role}/${id}`);
+      const data = await res.json();
+      return data.interviews || [];
+    },
+    enabled: !!id,
   });
 }

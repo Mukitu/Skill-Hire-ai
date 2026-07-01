@@ -61,11 +61,50 @@ CREATE TABLE IF NOT EXISTS applications (
   job_id VARCHAR(255) REFERENCES jobs(id) ON DELETE CASCADE,
   candidate_id VARCHAR(255) REFERENCES profiles(id) ON DELETE CASCADE,
   resume_text TEXT,
-  status VARCHAR(50) DEFAULT 'applied' CHECK (status IN ('applied', 'reviewing', 'interviewing', 'accepted', 'rejected')),
+  status VARCHAR(50) DEFAULT 'applied' CHECK (status IN ('applied', 'reviewing', 'interviewing', 'accepted', 'rejected', 'shortlisted')),
   score INT,
+  ai_ranking INT,
+  shortlisted BOOLEAN DEFAULT false,
+  match_score FLOAT,
   feedback TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Ensure applications table has new columns if it already exists
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS ai_ranking INT;
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS shortlisted BOOLEAN DEFAULT false;
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS match_score FLOAT;
+
+-- 10. INTERVIEWS Table
+CREATE TABLE IF NOT EXISTS interviews (
+  id VARCHAR(255) PRIMARY KEY,
+  job_id VARCHAR(255) REFERENCES jobs(id) ON DELETE CASCADE,
+  candidate_id VARCHAR(255) REFERENCES profiles(id) ON DELETE CASCADE,
+  scheduled_at TIMESTAMP WITH TIME ZONE,
+  status VARCHAR(50) DEFAULT 'scheduled' CHECK (status IN ('scheduled', 'completed', 'cancelled')),
+  meeting_link TEXT,
+  meeting_type VARCHAR(50) CHECK (meeting_type IN ('zoom', 'google_meet', 'custom')),
+  difficulty_level VARCHAR(50) DEFAULT 'Intermediate',
+  questions TEXT[] DEFAULT '{}',
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 11. INTERVIEW_SUMMARIES Table
+CREATE TABLE IF NOT EXISTS interview_summaries (
+  id VARCHAR(255) PRIMARY KEY,
+  interview_id VARCHAR(255) UNIQUE REFERENCES interviews(id) ON DELETE CASCADE,
+  strengths TEXT[] DEFAULT '{}',
+  weaknesses TEXT[] DEFAULT '{}',
+  recommendation TEXT,
+  feedback TEXT,
+  overall_score INT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Indexes for performance optimizing
+CREATE INDEX IF NOT EXISTS idx_interviews_job ON interviews(job_id);
+CREATE INDEX IF NOT EXISTS idx_interviews_candidate ON interviews(candidate_id);
+CREATE INDEX IF NOT EXISTS idx_interview_summaries_interview ON interview_summaries(interview_id);
 
 -- 5. SUBSCRIPTIONS Table
 CREATE TABLE IF NOT EXISTS subscriptions (

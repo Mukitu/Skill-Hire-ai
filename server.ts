@@ -24,9 +24,13 @@ import {
   aiCareerRoadmap,
   aiCompanyInsights,
   aiAuthenticityDetection,
-  aiCompanyReport
+  aiCompanyReport,
+  aiCandidateRanking,
+  aiGenerateInterview,
+  aiInterviewSummary,
+  aiShortlistCandidates
 } from './src/server/aiService';
-import { UserProfile, JobPost, SkillAssessment, AssessmentAttempt, MockInterviewSession, PracticalTask, TaskSubmission } from './src/types';
+import { UserProfile, JobPost, SkillAssessment, AssessmentAttempt, MockInterviewSession, PracticalTask, TaskSubmission, JobApplication, Interview, InterviewSummary } from './src/types';
 import { 
   getJobsFromSupabase, 
   isSupabaseServerConfigured,
@@ -35,7 +39,13 @@ import {
   getCertificatesFromSupabase,
   markNotificationAsReadInSupabase,
   insertTaskSubmission,
-  supabaseServer
+  supabaseServer,
+  updateApplicationInSupabase,
+  saveInterviewToSupabase,
+  getInterviewsForCompany,
+  getInterviewsForCandidate,
+  saveInterviewSummaryToSupabase,
+  sendNotificationToSupabase
 } from './src/server/supabase';
 
 async function startServer() {
@@ -1179,6 +1189,182 @@ async function startServer() {
     } catch (err: any) {
       return res.status(500).json({ status: 'error', message: err.message });
     }
+  });
+
+  // 9. AI Candidate Ranking
+  app.post('/api/ai/rank-candidates', async (req: Request, res: Response) => {
+    const { jobId } = req.body;
+    if (!jobId) return res.status(400).json({ status: 'error', message: 'Job ID is required.' });
+
+    try {
+      const job = db.getJob(jobId);
+      if (!job) return res.status(404).json({ status: 'error', message: 'Job not found.' });
+
+      const allApplications = db.getAllApplications().filter(a => a.jobId === jobId);
+      const candidates = allApplications.map(app => ({
+        profile: db.getUser(app.candidateId)!,
+        application: app
+      })).filter(c => c.profile);
+
+      if (candidates.length === 0) return res.json({ status: 'success', rankings: [], summary: 'No applicants to rank.' });
+
+      const result = await aiCandidateRanking(job, candidates);
+      
+      // Update applications with rankings
+      result.rankings.forEach(r => {
+        const app = allApplications.find(a => a.candidateId === r.candidateId);
+        if (app) {
+          app.aiRanking = r.score;
+          db.updateApplication(app.id, { aiRanking: r.score });
+          if (isSupabaseServerConfigured) {
+            updateApplicationInSupabase(app.id, { aiRanking: r.score });
+          }
+        }
+      });
+
+      return res.json({ status: 'success', ...result });
+    } catch (err: any) {
+      return res.status(500).json({ status: 'error', message: err.message });
+    }
+  });
+
+  // 10. AI Shortlisting
+  app.post('/api/ai/shortlist', async (req: Request, res: Response) => {
+    const { jobId } = req.body;
+    if (!jobId) return res.status(400).json({ status: 'error', message: 'Job ID is required.' });
+
+    try {
+      const job = db.getJob(jobId);
+      const allApplications = db.getAllApplications().filter(a => a.jobId === jobId);
+      const candidates = allApplications.map(app => ({
+        profile: db.getUser(app.candidateId)!,
+        application: app
+      })).filter(c => c.profile);
+
+      if (candidates.length === 0) return res.json({ status: 'success', shortlisted: [] });
+
+      const result = await aiShortlistCandidates(job!, candidates);
+      
+      // Update status to shortlisted
+      result.shortlistedCandidateIds.forEach(cid => {
+        const app = allApplications.find(a => a.candidateId === cid);
+        if (app) {
+          app.status = 'shortlisted';
+          app.shortlisted = true;
+          db.updateApplication(app.id, { status: 'shortlisted', shortlisted: true });
+          if (isSupabaseServerConfigured) {
+            updateApplicationInSupabase(app.id, { status: 'shortlisted', shortlisted: true });
+          }
+        }
+      });
+
+      return res.json({ status: 'success', ...result });
+    } catch (err: any) {
+      return res.status(500).json({ status: 'error', message: err.message });
+    }
+  });
+
+  // 11. AI Interview Question Generation
+  app.post('/api/ai/generate-interview', async (req: Request, res: Response) => {
+    const { jobId, candidateId, difficulty } = req.body;
+    if (!jobId || !candidateId) return res.status(400).json({ status: 'error', message: 'Job ID and Candidate ID are required.' });
+
+    try {
+      const job = db.getJob(jobId);
+      const candidate = db.getUser(candidateId);
+      if (!job || !candidate) return res.status(404).json({ status: 'error', message: 'Job or Candidate not found.' });
+
+      const result = await aiGenerateInterview(job, candidate, difficulty || 'Intermediate');
+      return res.json({ status: 'success', ...result });
+    } catch (err: any) {
+      return res.status(500).json({ status: 'error', message: err.message });
+    }
+  });
+
+  // 12. Interview Scheduling
+  app.post('/api/interviews/schedule', async (req: Request, res: Response) => {
+    const { jobId, candidateId, scheduledAt, meetingType, meetingLink, difficultyLevel, questions } = req.body;
+    
+    const interview: Interview = {
+      id: 'int-' + Math.random().toString(36).substring(2, 10),
+      jobId,
+      candidateId,
+      scheduledAt,
+      status: 'scheduled',
+      meetingType,
+      meetingLink,
+      difficultyLevel: difficultyLevel || 'Intermediate',
+      questions: questions || [],
+      createdAt: new Date().toISOString()
+    };
+
+    db.saveHiringInterview(interview);
+    if (isSupabaseServerConfigured) {
+      await saveInterviewToSupabase(interview);
+    }
+
+    // Send notification to candidate
+    const msg = `Your interview for ${db.getJob(jobId)?.title} has been scheduled for ${new Date(scheduledAt).toLocaleString()}.`;
+    db.sendNotification(candidateId, 'Interview Scheduled', msg);
+    if (isSupabaseServerConfigured) {
+      sendNotificationToSupabase(candidateId, 'Interview Scheduled', msg);
+    }
+
+    return res.json({ status: 'success', interview });
+  });
+
+  // 13. AI Interview Summary
+  app.post('/api/ai/interview-summary', async (req: Request, res: Response) => {
+    const { interviewId, feedback } = req.body;
+    if (!interviewId || !feedback) return res.status(400).json({ status: 'error', message: 'Interview ID and feedback are required.' });
+
+    try {
+      const interview = db.getHiringInterview(interviewId);
+      if (!interview) return res.status(404).json({ status: 'error', message: 'Interview not found.' });
+
+      const result = await aiInterviewSummary(interview, feedback);
+      
+      const summary: InterviewSummary = {
+        id: 'sum-' + Math.random().toString(36).substring(2, 10),
+        interviewId,
+        strengths: result.strengths,
+        weaknesses: result.weaknesses,
+        recommendation: result.recommendation,
+        feedback: result.feedbackSummary,
+        overallScore: result.overallScore,
+        createdAt: new Date().toISOString()
+      };
+
+      db.saveInterviewSummary(summary);
+      if (isSupabaseServerConfigured) {
+        await saveInterviewSummaryToSupabase(summary);
+      }
+
+      return res.json({ status: 'success', summary });
+    } catch (err: any) {
+      return res.status(500).json({ status: 'error', message: err.message });
+    }
+  });
+
+  // 14. Get Interviews
+  app.get('/api/interviews/company/:id', async (req: Request, res: Response) => {
+    const { id } = req.params;
+    let interviews = db.getHiringInterviewsForCompany(id);
+    if (isSupabaseServerConfigured) {
+      const supInterviews = await getInterviewsForCompany(id);
+      if (supInterviews.length > 0) interviews = supInterviews;
+    }
+    return res.json({ status: 'success', interviews });
+  });
+
+  app.get('/api/interviews/candidate/:id', async (req: Request, res: Response) => {
+    const { id } = req.params;
+    let interviews = db.getHiringInterviewsForCandidate(id);
+    if (isSupabaseServerConfigured) {
+      const supInterviews = await getInterviewsForCandidate(id);
+      if (supInterviews.length > 0) interviews = supInterviews;
+    }
+    return res.json({ status: 'success', interviews });
   });
 
   // Mount bdapps carrier router

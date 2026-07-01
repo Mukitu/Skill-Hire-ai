@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { UserProfile, JobPost, SkillAssessment, AssessmentAttempt, MockInterviewSession, PracticalTask, TaskSubmission } from '../types';
+import { UserProfile, JobPost, SkillAssessment, AssessmentAttempt, MockInterviewSession, PracticalTask, TaskSubmission, JobApplication, Interview, InterviewSummary } from '../types';
 import { 
   isSupabaseServerConfigured,
   saveProfileToSupabase,
@@ -852,6 +852,65 @@ class DBManager {
 
   getCandidatesList(): UserProfile[] {
     return Object.values(this.data.users).filter(u => u.role === 'candidate');
+  }
+
+  getAllApplications(): any[] {
+    return this.data.applications || [];
+  }
+
+  updateApplication(id: string, updates: any): any | undefined {
+    if (!this.data.applications) this.data.applications = [];
+    const idx = this.data.applications.findIndex(a => a.id === id);
+    if (idx !== -1) {
+      this.data.applications[idx] = { ...this.data.applications[idx], ...updates };
+      this.save();
+      return this.data.applications[idx];
+    }
+    return undefined;
+  }
+
+  saveHiringInterview(interview: Interview) {
+    if (!(this.data as any).realInterviews) {
+      (this.data as any).realInterviews = [];
+    }
+    const idx = (this.data as any).realInterviews.findIndex((i: any) => i.id === interview.id);
+    if (idx !== -1) {
+      (this.data as any).realInterviews[idx] = interview;
+    } else {
+      (this.data as any).realInterviews.push(interview);
+    }
+    this.save();
+  }
+
+  getHiringInterview(id: string): Interview | undefined {
+    return ((this.data as any).realInterviews || []).find((i: any) => i.id === id);
+  }
+
+  getHiringInterviewsForCompany(companyId: string): Interview[] {
+    const jobs = this.getJobs().filter(j => j.companyId === companyId);
+    const jobIds = jobs.map(j => j.id);
+    return ((this.data as any).realInterviews || []).filter((i: any) => jobIds.includes(i.jobId));
+  }
+
+  getHiringInterviewsForCandidate(candidateId: string): Interview[] {
+    return ((this.data as any).realInterviews || []).filter((i: any) => i.candidateId === candidateId);
+  }
+
+  saveInterviewSummary(summary: InterviewSummary) {
+    if (!(this.data as any).interviewSummaries) {
+      (this.data as any).interviewSummaries = [];
+    }
+    const idx = (this.data as any).interviewSummaries.findIndex((s: any) => s.id === summary.id);
+    if (idx !== -1) {
+      (this.data as any).interviewSummaries[idx] = summary;
+    } else {
+      (this.data as any).interviewSummaries.push(summary);
+    }
+    this.save();
+  }
+
+  sendNotification(userId: string, title: string, message: string) {
+    return this.createNotification(userId, title, message);
   }
 
   getCompanyInterviews(companyId: string): MockInterviewSession[] {

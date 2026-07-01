@@ -117,6 +117,10 @@ export function useAIReputationScore(candidateId?: string) {
       };
       badge: string;
       summary: string;
+      githubConnected: boolean;
+      portfolioConnected: boolean;
+      verifiedCount: number;
+      submissionCount: number;
     };
   }, Error>({
     queryKey: ['ai-reputation', candidateId],

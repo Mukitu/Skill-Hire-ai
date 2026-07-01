@@ -302,11 +302,122 @@ You MUST respond with a valid JSON object matching this exact schema:
   "suggestedAssessmentTask": "Build a simple robust debounce controller with cancellation support in TS.",
   "adviceForAttraction": "A detailed strategy guide on how to frame the description, career growth paths, and workspace flexibility to attract top-tier professionals."
 }`,
-    user: `Analyze this company job posting to provide optimization insights:
-- Category: ${category}
-- Job Title: ${title}
-- Original Job Description:
-"${description}"
-- Requirements List: ${reqsStr}`
+    user: `Job Details:
+Title: ${title}
+Category: ${category}
+Description: ${description}
+Current Requirements: ${reqsStr}`
+  };
+}
+
+/**
+ * 9. Prompt for AI Candidate Ranking
+ */
+export function getCandidateRankingPrompt(job: JobPost, candidates: { profile: UserProfile; application: any }[]) {
+  const candidateData = candidates.map((c, idx) => `
+[CANDIDATE ${idx + 1}]
+- Name: ${c.profile.name}
+- Title: ${c.profile.title || 'Developer'}
+- AI Reputation Score: ${c.profile.reputationScore}
+- Assessment Score: ${c.application.score || 'N/A'}
+- Match Score: ${c.application.matchScore || 'N/A'}
+- Skills: ${c.profile.skills.join(', ')}
+`).join('\n');
+
+  return {
+    system: `You are a Lead Hiring Architect. Rank the following candidates for the specified job position based on their overall profile, reputation score, assessment results, and skill alignment.
+Assign a ranking score (0-100) and a numerical rank (1, 2, 3...) to each.
+You MUST respond with a valid JSON object matching this exact schema:
+{
+  "rankings": [
+    {
+      "candidateId": "id-of-candidate",
+      "rank": 1,
+      "score": 95,
+      "reasoning": "Brief explanation of the ranking."
+    }
+  ],
+  "topCandidateId": "id-of-the-best-match",
+  "summary": "Overall market quality summary for this job pool."
+}`,
+    user: `Rank these candidates for the job: "${job.title}" at "${job.companyName}".
+
+[JOB REQUIREMENTS]
+${job.description}
+Requirements: ${(job.requirements || []).join(', ')}
+
+[CANDIDATES POOL]
+${candidateData}`
+  };
+}
+
+/**
+ * 10. Prompt for AI Interview Question Generation
+ */
+export function getInterviewGenerationPrompt(job: JobPost, candidate: UserProfile, difficulty: string) {
+  return {
+    system: `You are a Technical Interviewer. Generate 5 personalized, deep-dive interview questions for a candidate based on their profile and the job description.
+The difficulty level requested is: ${difficulty}.
+Focus on:
+- Technical architecture decisions
+- Problem-solving scenarios related to the job
+- Behavioral questions about engineering collaboration
+- Domain-specific deep dives (e.g. React internals, SQL optimization, etc.)
+You MUST respond with a valid JSON object matching this exact schema:
+{
+  "questions": ["Question 1?", "Question 2?", "Question 3?", "Question 4?", "Question 5?"],
+  "difficulty": "${difficulty}",
+  "focustAreas": ["Area 1", "Area 2"]
+}`,
+    user: `Generate ${difficulty} level interview questions for:
+Candidate: ${candidate.name} (${candidate.title})
+Job: ${job.title}
+Job Description: ${job.description}`
+  };
+}
+
+/**
+ * 11. Prompt for AI Interview Summary & Recommendation
+ */
+export function getInterviewSummaryPrompt(interview: any, feedback: string) {
+  return {
+    system: `You are a Senior Hiring Partner. Based on the interview feedback provided, generate a final hiring recommendation, a list of strengths/weaknesses, and an overall score.
+You MUST respond with a valid JSON object matching this exact schema:
+{
+  "overallScore": 85,
+  "strengths": ["Strong architectural thinking", "Excellent communication"],
+  "weaknesses": ["Needs deeper knowledge of k8s", "Moderate SQL tuning skills"],
+  "recommendation": "Strong Hire / Hire / Consider / Reject",
+  "feedbackSummary": "A concise professional summary of the performance."
+}`,
+    user: `Summarize the interview for:
+Interview ID: ${interview.id}
+Difficulty: ${interview.difficultyLevel || 'Intermediate'}
+Feedback Provided: "${feedback}"`
+  };
+}
+
+/**
+ * 12. Prompt for AI Shortlisting
+ */
+export function getShortlistingPrompt(job: JobPost, candidates: { profile: UserProfile; application: any }[]) {
+  const candidateData = candidates.map((c, idx) => `
+[CANDIDATE ${idx + 1}]
+- ID: ${c.profile.id}
+- Name: ${c.profile.name}
+- Reputation: ${c.profile.reputationScore}
+- Match: ${c.application.matchScore || 0}%
+`).join('\n');
+
+  return {
+    system: `You are an AI Talent Scout. Automatically shortlist the best candidates from the provided pool for the job description.
+Shortlist only those who meet high standards (usually match > 80% and reputation > 600).
+You MUST respond with a valid JSON object matching this exact schema:
+{
+  "shortlistedCandidateIds": ["id1", "id2"],
+  "justification": "Why these candidates were selected."
+}`,
+    user: `Shortlist candidates for "${job.title}":
+${candidateData}`
   };
 }
