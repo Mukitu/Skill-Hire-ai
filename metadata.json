@@ -1,0 +1,6 @@
+{
+  "name": "SkillHire AI",
+  "description": "AI Powered Career Intelligence Platform with bdapps Carrier Billing, AI assessment engines, skill verification, and interview generation.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
