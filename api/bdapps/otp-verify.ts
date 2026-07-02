@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { normalizePhone, otpStore } from '../../src/server/otpStore';
 import db from '../../src/server/db';
 import { bdappsFetch } from '../../src/server/bdappsHelper';
+import { supabaseServer } from '../../src/server/supabase';
 
 const APP_ID = process.env.BDAPPS_APPLICATION_ID || '';
 const PASSWORD = process.env.BDAPPS_PASSWORD || '';
@@ -24,41 +25,16 @@ export default async function otpVerifyHandler(req: Request, res: Response) {
     return res.status(400).json({ status: 'ERROR', message: 'No pending OTP request found for this number' });
   }
 
-  const isReal = APP_ID && PASSWORD && !APP_ID.startsWith('DEMO');
+  // Ensure credentials exist
+  if (!APP_ID || !PASSWORD) {
+    console.error('[BDApps] Missing credentials in environment');
+    return res.status(500).json({ 
+      status: 'ERROR', 
+      message: 'Server Configuration Error: BDApps credentials are missing.' 
+    });
+  }
 
   try {
-    if (!isReal) {
-      // Simulation mode
-      if (code === '123456') {
-        otpStore.delete(cleanPhone);
-        
-        const userId = `bd_${cleanPhone}`;
-        let user = db.getUser(userId);
-        
-        if (!user) {
-          user = db.createUser(userId, {
-            id: userId,
-            phone: cleanPhone,
-            email: `${cleanPhone}@bdapps.user`,
-            name: 'BDApps User',
-            role: 'candidate',
-            subscribed: true,
-            reputationScore: 300,
-            verifiedSkills: {},
-            skills: []
-          });
-        }
-
-        return res.json({
-          status: 'success',
-          message: 'OTP verified successfully (Simulated)',
-          user
-        });
-      } else {
-        return res.status(401).json({ status: 'ERROR', message: 'Invalid simulation OTP' });
-      }
-    }
-
     // Real API call
     const payload = {
       version: '1.0',
@@ -70,10 +46,31 @@ export default async function otpVerifyHandler(req: Request, res: Response) {
 
     const { ok, data, error } = await bdappsFetch('otp/verify', payload);
 
+    if (supabaseServer) {
+        await supabaseServer.from('otp_logs').insert({
+            phone: cleanPhone,
+            reference_no: stored.referenceNo,
+            status: ok ? 'VERIFIED' : 'FAILED',
+            otp_code: code
+        });
+    }
+
     if (ok && data.statusCode === 'S1000') {
       otpStore.delete(cleanPhone);
       
-      const userId = `bd_${cleanPhone}`;
+      // Step 2: Trigger Subscription Activation as per PDF (action 1 = subscribe)
+      const subPayload = {
+        version: '1.0',
+        applicationId: APP_ID,
+        password: PASSWORD,
+        subscriberId: `tel:${cleanPhone}`,
+        action: 1 
+      };
+      
+      const subResult = await bdappsFetch('subscription/send', subPayload);
+      const isSubscribed = subResult.ok && (subResult.data.statusCode === 'S1000' || subResult.data.statusCode === 'E1351'); // E1351 = already subscribed
+
+      const userId = req.body.userId || `bd_${cleanPhone}`;
       let user = db.getUser(userId);
       
       if (!user) {
@@ -83,23 +80,26 @@ export default async function otpVerifyHandler(req: Request, res: Response) {
           email: `${cleanPhone}@bdapps.user`,
           name: 'BDApps User',
           role: 'candidate',
-          subscribed: data.subscriptionStatus === 'REGISTERED',
+          subscribed: isSubscribed,
           reputationScore: 300,
           verifiedSkills: {},
           skills: []
         });
       } else {
-          // Update subscription status if returned
-          if (data.subscriptionStatus) {
-              db.updateUser(user.id, { subscribed: data.subscriptionStatus === 'REGISTERED' });
-          }
+          db.updateUser(user.id, { subscribed: isSubscribed });
       }
+
+      // Update subscription record with official metadata
+      db.updateSubscription(cleanPhone, isSubscribed ? 'subscribed' : 'unsubscribed', 'otp_verify', '3.00 BDT', {
+          subscriberId: `tel:${cleanPhone}`,
+          status: isSubscribed ? 'REGISTERED' : 'PENDING'
+      });
 
       return res.json({
         status: 'success',
-        message: 'Authentication successful',
+        message: 'OTP verified and subscription requested',
         user,
-        subscriptionStatus: data.subscriptionStatus
+        subscriptionStatus: isSubscribed ? 'REGISTERED' : 'UNREGISTERED'
       });
     }
 

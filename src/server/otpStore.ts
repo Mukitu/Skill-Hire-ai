@@ -8,13 +8,16 @@ export const otpStore = new Map<string, { referenceNo: string; timestamp: number
 export const normalizePhone = (phone: string): string => {
   let clean = phone.replace(/\D/g, '');
   
-  if (clean.startsWith('0')) {
+  // 01XXXXXXXXX (11 digits) -> 8801XXXXXXXXX (13 digits)
+  if (clean.length === 11 && clean.startsWith('0')) {
     clean = '88' + clean;
-  } else if (clean.startsWith('1') && clean.length === 10) {
+  } 
+  // 1XXXXXXXXX (10 digits) -> 8801XXXXXXXXX (13 digits)
+  else if (clean.length === 10 && clean.startsWith('1')) {
     clean = '880' + clean;
   }
-  
-  if (clean.startsWith('8888')) {
+  // 008801XXXXXXXXX -> 8801XXXXXXXXX
+  else if (clean.startsWith('0088')) {
     clean = clean.substring(2);
   }
   

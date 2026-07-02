@@ -3,6 +3,8 @@ import db from './db';
 import { normalizePhone, otpStore } from './otpStore';
 import otpRequestHandler from '../../api/bdapps/otp-request';
 import otpVerifyHandler from '../../api/bdapps/otp-verify';
+import callbackHandler from '../../api/bdapps/callback';
+import { getSubscriptionStatus, unsubscribe } from './bdappsController';
 import { bdappsFetch } from './bdappsHelper';
 
 /**
@@ -40,19 +42,17 @@ const handleSubscriptionAction = async (req: Request, res: Response, action: '1'
   }
 
   const cleanPhone = normalizePhone(phone);
-  const isReal = APP_ID && PASSWORD && !APP_ID.startsWith('DEMO');
+
+  // Ensure credentials exist
+  if (!APP_ID || !PASSWORD) {
+    console.error('[BDApps] Missing credentials in environment');
+    return res.status(500).json({ 
+      status: 'ERROR', 
+      message: 'Server Configuration Error: BDApps credentials are missing.' 
+    });
+  }
 
   try {
-    if (!isReal) {
-      db.updateSubscription(cleanPhone, action === '1' ? 'subscribed' : 'unsubscribed', action === '1' ? 'subscribe' : 'unsubscribe');
-      return res.json({
-        status: 'SUCCESS',
-        message: action === '1' ? 'Subscribed successfully (Simulated)' : 'Unsubscribed successfully (Simulated)',
-        isSimulated: true,
-        statusCode: 'S1000'
-      });
-    }
-
     const payload = {
       version: '1.0',
       applicationId: APP_ID,
@@ -80,59 +80,14 @@ const handleSubscriptionAction = async (req: Request, res: Response, action: '1'
   }
 };
 
-/**
- * 4. Get Subscriber Status
- * POST /subscription/getStatus
- */
-export const handleSubscriptionStatus = async (req: Request, res: Response) => {
-  const { phone } = req.params;
-
-  if (!phone) {
-    return res.status(400).json({ status: 'ERROR', message: 'Phone number is required' });
-  }
-
-  const cleanPhone = normalizePhone(phone);
-  const isReal = APP_ID && PASSWORD && !APP_ID.startsWith('DEMO');
-
-  try {
-    if (!isReal) {
-      return res.json({
-        phone: cleanPhone,
-        status: 'subscribed',
-        isSimulated: true
-      });
-    }
-
-    const payload = {
-      version: '1.0',
-      applicationId: APP_ID,
-      password: PASSWORD,
-      subscriberId: `tel:${cleanPhone}`
-    };
-
-    const { ok, data, error } = await bdappsFetch('subscription/getStatus', payload);
-
-    if (ok) {
-      // Transform BDApps response to our frontend format
-      return res.json({
-        phone: cleanPhone,
-        status: data.status === 'SUBSCRIBED' ? 'subscribed' : 'unsubscribed',
-        raw: data
-      });
-    }
-
-    throw error || new Error('Failed to query status');
-  } catch (error) {
-    return res.status(500).json({ status: 'ERROR', message: 'Failed to query status' });
-  }
-};
-
 // Router Definition
 bdappsRouter.post('/auth/otp-send', handleOtpSend);
 bdappsRouter.post('/auth/otp-verify', handleOtpVerify);
 bdappsRouter.post('/subscription/subscribe', (req, res) => handleSubscriptionAction(req, res, '1'));
-bdappsRouter.post('/subscription/unsubscribe', (req, res) => handleSubscriptionAction(req, res, '0'));
-bdappsRouter.get('/subscription/status/:phone', handleSubscriptionStatus);
+bdappsRouter.post('/subscription/unsubscribe', unsubscribe);
+bdappsRouter.get('/subscription/status/:phone', getSubscriptionStatus);
+bdappsRouter.post('/callback', callbackHandler);
+bdappsRouter.post('/notify', callbackHandler); // Alias for notification
 
 // Backward compatibility routes
 bdappsRouter.post('/otp/request', handleOtpSend);

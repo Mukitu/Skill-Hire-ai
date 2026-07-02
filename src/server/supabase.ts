@@ -26,7 +26,7 @@ export async function saveProfileToSupabase(user: UserProfile) {
   if (!supabaseServer) return null;
   try {
     const { data, error } = await supabaseServer
-      .from('profiles')
+      .from('users')
       .upsert({
         id: user.id,
         email: user.email,
@@ -71,7 +71,7 @@ export async function getProfileFromSupabase(id: string): Promise<UserProfile | 
   if (!supabaseServer) return null;
   try {
     const { data, error } = await supabaseServer
-      .from('profiles')
+      .from('users')
       .select('*')
       .eq('id', id)
       .single();
@@ -338,18 +338,23 @@ export async function saveInterviewSummaryToSupabase(summary: InterviewSummary) 
 }
 
 // 4. Subscriptions
-export async function saveSubscriptionToSupabase(phone: string, status: string, userId?: string) {
+export async function saveSubscriptionToSupabase(phone: string, status: string, userId?: string, extraData: any = {}) {
   if (!supabaseServer) return null;
   try {
     const { data, error } = await supabaseServer
       .from('subscriptions')
       .upsert({
-        id: 'sub-' + Math.random().toString(36).substring(2, 10),
         phone: phone,
         status: status,
         date: new Date().toISOString().split('T')[0],
-        user_id: userId || null
-      });
+        user_id: userId || null,
+        subscriber_id: extraData.subscriberId || `tel:${phone}`,
+        operator: extraData.operator || 'ROBI',
+        activation_date: extraData.activationDate || new Date().toISOString(),
+        expiry_date: extraData.expiryDate || null,
+        next_billing_date: extraData.nextBillingDate || null,
+        billing_status: extraData.billingStatus || 'ACTIVE'
+      }, { onConflict: 'phone' });
 
     if (error) throw error;
     return data;

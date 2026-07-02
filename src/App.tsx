@@ -7,6 +7,7 @@ import HeroLanding from './components/HeroLanding';
 import CandidateDashboard from './components/CandidateDashboard';
 import CompanyDashboard from './components/CompanyDashboard';
 import AdminDashboard from './components/AdminDashboard';
+import SubscriptionPage from './components/SubscriptionPage';
 import BillingModal from './components/BillingModal';
 import PublicProfile from './components/public/PublicProfile';
 import VerifyCertificate from './components/public/VerifyCertificate';
@@ -64,7 +65,11 @@ export default function App() {
       const path = location.pathname;
       if (path === '/' || path === '') {
         if (currentUser.role === 'candidate') {
-          navigate('/candidate/assessments', { replace: true });
+          if (currentUser.subscribed) {
+            navigate('/candidate/assessments', { replace: true });
+          } else {
+            navigate('/subscription', { replace: true });
+          }
         } else if (currentUser.role === 'company') {
           navigate('/company/candidates', { replace: true });
         } else if (currentUser.role === 'admin') {
@@ -77,7 +82,11 @@ export default function App() {
   const handleLoginSuccess = (user: UserProfile) => {
     setCurrentUser(user);
     if (user.role === 'candidate') {
-      navigate('/candidate/assessments');
+      if (user.subscribed) {
+        navigate('/candidate/assessments');
+      } else {
+        navigate('/subscription');
+      }
     } else if (user.role === 'company') {
       navigate('/company/candidates');
     } else if (user.role === 'admin') {
@@ -224,11 +233,7 @@ export default function App() {
                   currentUser.subscribed ? (
                     <Navigate to="/candidate/assessments" replace />
                   ) : (
-                    <HeroLanding 
-                      onLoginSuccess={handleLoginSuccess} 
-                      currentUser={currentUser}
-                      onLogout={handleSignOut}
-                    />
+                    <Navigate to="/subscription" replace />
                   )
                 ) : currentUser.role === 'company' ? (
                   <Navigate to="/company/dashboard" replace />
@@ -244,12 +249,31 @@ export default function App() {
               )
             } 
           />
+
+          <Route 
+            path="/subscription" 
+            element={
+              currentUser && currentUser.role === 'candidate' ? (
+                currentUser.subscribed ? (
+                  <Navigate to="/candidate/assessments" replace />
+                ) : (
+                  <SubscriptionPage />
+                )
+              ) : (
+                <Navigate to="/" replace />
+              )
+            } 
+          />
           
           <Route 
             path="/candidate" 
             element={
-              currentUser && currentUser.role === 'candidate' && currentUser.subscribed ? (
-                <Navigate to="/candidate/assessments" replace />
+              currentUser && currentUser.role === 'candidate' ? (
+                currentUser.subscribed ? (
+                  <Navigate to="/candidate/assessments" replace />
+                ) : (
+                  <Navigate to="/subscription" replace />
+                )
               ) : (
                 <Navigate to="/" replace />
               )
@@ -259,11 +283,15 @@ export default function App() {
           <Route 
             path="/candidate/:tab" 
             element={
-              currentUser && currentUser.role === 'candidate' && currentUser.subscribed ? (
-                <CandidateDashboard 
-                  user={currentUser} 
-                  onOpenSubscribe={() => setOpenBilling(true)} 
-                />
+              currentUser && currentUser.role === 'candidate' ? (
+                currentUser.subscribed ? (
+                  <CandidateDashboard 
+                    user={currentUser} 
+                    onOpenSubscribe={() => setOpenBilling(true)} 
+                  />
+                ) : (
+                  <Navigate to="/subscription" replace />
+                )
               ) : (
                 <Navigate to="/" replace />
               )

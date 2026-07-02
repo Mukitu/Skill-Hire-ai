@@ -1378,7 +1378,7 @@ async function startServer() {
     if (isSupabaseServerConfigured) {
       try {
         const { data, error } = await supabaseServer
-          .from('profiles')
+          .from('users')
           .select('*')
           .eq('id', id)
           .single();
@@ -1465,7 +1465,7 @@ async function startServer() {
     if (isSupabaseServerConfigured) {
       try {
         const { data, error } = await supabaseServer
-          .from('profiles')
+          .from('users')
           .select('*')
           .eq('id', candidateId)
           .single();

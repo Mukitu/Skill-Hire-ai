@@ -652,10 +652,11 @@ class DBManager {
     });
   }
 
-  updateSubscription(phone: string, status: string, action: string = 'subscribe', amount: string = '3.00 BDT') {
+  updateSubscription(phone: string, status: string, action: string = 'subscribe', amount: string = '3.00 BDT', extraData: any = {}) {
     this.data.subscriptions[phone] = {
       status,
-      date: new Date().toISOString().split('T')[0]
+      date: new Date().toISOString().split('T')[0],
+      ...extraData
     };
     // Update any user profile with this phone number to reflect subscription
     const matchedUser = Object.values(this.data.users).find(u => u.phone === phone);
@@ -675,7 +676,7 @@ class DBManager {
     this.addSubscriptionHistory(phone, action, amount, status, matchedUser?.id);
 
     // Sync to Supabase
-    saveSubscriptionToSupabase(phone, status, matchedUser?.id);
+    saveSubscriptionToSupabase(phone, status, matchedUser?.id, extraData);
   }
 
 
