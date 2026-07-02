@@ -85,9 +85,28 @@ bdappsRouter.post('/auth/otp-send', handleOtpSend);
 bdappsRouter.post('/auth/otp-verify', handleOtpVerify);
 bdappsRouter.post('/subscription/subscribe', (req, res) => handleSubscriptionAction(req, res, '1'));
 bdappsRouter.post('/subscription/unsubscribe', unsubscribe);
+bdappsRouter.post('/subscription/renew', (req: Request, res: Response) => {
+  const { phone, userId } = req.body;
+  if (!phone) {
+    return res.status(400).json({ status: 'ERROR', message: 'Phone number is required' });
+  }
+  const cleanPhone = normalizePhone(phone);
+  db.updateSubscription(cleanPhone, 'subscribed', 'renew', '3.00 BDT');
+  if (userId) {
+    db.updateUser(userId, { subscribed: true });
+  }
+  return res.json({ status: 'SUCCESS', statusCode: 'S1000', message: 'Subscription successfully renewed' });
+});
 bdappsRouter.get('/subscription/status/:phone', getSubscriptionStatus);
+bdappsRouter.get('/subscription/history/:phone', (req: Request, res: Response) => {
+  const { phone } = req.params;
+  const cleanPhone = normalizePhone(phone);
+  const history = db.getSubscriptionHistory(cleanPhone);
+  return res.json({ status: 'SUCCESS', history });
+});
 bdappsRouter.post('/callback', callbackHandler);
 bdappsRouter.post('/notify', callbackHandler); // Alias for notification
+bdappsRouter.post('/unsubscribe', unsubscribe);
 
 // Backward compatibility routes
 bdappsRouter.post('/otp/request', handleOtpSend);
